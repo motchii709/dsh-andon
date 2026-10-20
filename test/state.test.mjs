@@ -535,3 +535,22 @@ test('the model line survives the modelSelection wrapper', async () => {
 	assert.match(snap.vitals.model, /nvnim/);
 	assert.match(snap.cards.find((c) => c.id === 'session:ses_andon0001').detail.model, /nvnim/);
 });
+
+test('token totals survive the tokenUsage state wrapper', async () => {
+	const { collector } = await collectorFor();
+	const snap = collector.snapshot();
+
+	// `stateOf` hands back TokenUsageState `{ totals, last }`; the flat four-bucket
+	// shape is the wire view. Reading the flat fields off the state gives zeros,
+	// and a board that says トークン 0 while the harness burns millions is worse
+	// than one that omits the number.
+	assert.ok(snap.vitals.tokens.input > 0, 'input tokens reached the header');
+	assert.ok(snap.vitals.tokens.output > 0, 'output tokens reached the header');
+	assert.ok(snap.vitals.tokens.cacheRead > 0, 'cache reads reached the header');
+
+	const card = snap.cards.find((c) => c.id === 'session:ses_andon0001');
+	assert.ok(
+		card.metrics.some((m) => m.label === 'トークン'),
+		'the card shows a token metric',
+	);
+});

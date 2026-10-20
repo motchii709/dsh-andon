@@ -84,7 +84,7 @@ export function createMockCtx(overrides = {}) {
 					{ content: 'VLM で見た目を検証', status: 'pending' },
 				],
 				sessionStats: { turns: 9, steps: 62, openStep: true, pendingCalls: 1 },
-				tokenUsage: { uncachedInputTokens: 184_320, outputTokens: 27_450, cacheReadTokens: 1_204_000, cacheWriteTokens: 96_000 },
+				tokenUsage: { totals: { uncachedInputTokens: 184_320, outputTokens: 27_450, cacheReadTokens: 1_204_000, cacheWriteTokens: 96_000 }, last: null },
 				contextPressure: { projectedTokens: 141_800, pressureTokens: 138_200, contextWindow: 262_144 },
 				inbox: { 'next-turn': [], 'next-step': [{ id: 'q1' }, { id: 'q2' }] },
 				// Real shape is { lastUsed, pending } — a wrapper, like goal.
@@ -97,7 +97,7 @@ export function createMockCtx(overrides = {}) {
 				title: null,
 				todos: [{ content: 'imu のノイズを平滑化', status: 'pending' }],
 				sessionStats: { turns: 34, steps: 210, openStep: false, pendingCalls: 0 },
-				tokenUsage: { uncachedInputTokens: 902_400, outputTokens: 101_200, cacheReadTokens: 4_100_000, cacheWriteTokens: 220_000 },
+				tokenUsage: { totals: { uncachedInputTokens: 902_400, outputTokens: 101_200, cacheReadTokens: 4_100_000, cacheWriteTokens: 220_000 }, last: null },
 				contextPressure: { projectedTokens: 214_000, pressureTokens: 209_500, contextWindow: 262_144 },
 				inbox: { 'next-turn': [], 'next-step': [] },
 				// Real shape is { lastUsed, pending } — a wrapper, like goal.
@@ -127,7 +127,7 @@ export function createMockCtx(overrides = {}) {
 				title: '古いリポジトリの整理',
 				todos: null,
 				sessionStats: { turns: 4, steps: 18, openStep: false, pendingCalls: 0 },
-				tokenUsage: { uncachedInputTokens: 44_100, outputTokens: 6_300, cacheReadTokens: 120_000, cacheWriteTokens: 12_000 },
+				tokenUsage: { totals: { uncachedInputTokens: 44_100, outputTokens: 6_300, cacheReadTokens: 120_000, cacheWriteTokens: 12_000 }, last: null },
 				contextPressure: { projectedTokens: 61_200, pressureTokens: 58_900, contextWindow: 262_144 },
 				inbox: { 'next-turn': [{ id: 'm1' }], 'next-step': [] },
 				// Real shape is { lastUsed, pending } — a wrapper, like goal.
