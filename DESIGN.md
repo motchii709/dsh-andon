@@ -336,6 +336,8 @@ dsh-andon/
     state.js              # 状態収集。ctx を受け取り上記JSONを返す純粋モジュール
   public/
     tokens.css            # 凍結済みデザイントークン（変更禁止・追記のみ）
+    md3ex.css             # M3 Expressive 層（形状・トーン・活字・モーション・
+                          #   3デバイスのブレークポイント）。インライン <style> の後に読む
     board.js              # 共通クライアント（ポーリング・時刻・数値・DOM生成）
     andon.html / andon.js
     kanban.html / kanban.js
@@ -343,9 +345,18 @@ dsh-andon/
     state.test.mjs        # 偽 ctx で state.js を検証（node標準 assert のみ）
     mock-ctx.mjs          # 偽 ctx フィクスチャ + settle()
   tools/
-    preview.mjs           # スタンドアロン確認サーバー（モックデータ・387行目参照）
-    shots.mjs             # ヘッドレス Edge で4枚撮る（目視ループ用）
+    preview.mjs           # スタンドアロン確認サーバー（モックデータ・?scenario=）
+    shots.mjs             # ヘッドレス Edge で 3ビューポート × 2盤 × 3シナリオを撮る
+    phone-harness.html    # 390px 実寸の確認用。iframe は本物のビューポートなので
+                          #   headless Edge の最小ウィンドウ幅に騙されない
 ```
+
+- 資産は**2箇所の許可リストに登録が必要**: `lib/index.js` の明示テーブルと、
+  `tools/preview.mjs` の正規表現。片方だけ足すと 404 になり、
+  「CSS が効かない」ように見える（実際に `md3ex.css` で起きた）。
+- `tools/preview.mjs` は `lib/state.js` を**起動時に import** する。state.js を変えたら
+  プレビューサーバーの再起動が要る。古いモジュールが残ると数字だけ古い、という
+  分かりにくい壊れ方をする。
 
 - `lib/state.js` は **HTTP も cordis も知らない**。`createCollector(ctx)` で collector を作り、
   `collector.snapshot()` が上記オブジェクトを返す。`ctx` のメソッドは try/catch で包む。
