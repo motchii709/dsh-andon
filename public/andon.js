@@ -139,10 +139,14 @@ function renderTicker(alerts, activity) {
 	}
 	if (!lines.length) {
 		for (const item of activity.slice(0, 3)) {
+			// The collector folds repeats into `count`; print it as ×N so three
+			// turns of the same event read as one counted line instead of three
+			// rows that all say 応答 and distinguish nothing.
+			const repeat = Number(item.count) > 1 ? ` ×${item.count}` : '';
 			lines.push({
 				id: `l:${item.at}:${lines.length}`,
 				sev: item.severity === 'alert' || item.severity === 'warn' ? item.severity : 'ok',
-				text: clampText(item.text, 90),
+				text: clampText(item.text + repeat, 90),
 				time: fmtClockShort(item.at),
 			});
 		}

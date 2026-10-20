@@ -395,6 +395,12 @@
 				}
 			}
 		</style>
+		<!-- Material 3 Expressive layer, loaded LAST on purpose: it overrides
+		     the page rules above (shape scale, tonal surfaces, the phone
+		     breakpoint). Loaded before <style>, its phone rules lost to the
+		     page's own @media (max-width:1100px) block and the board overflowed
+		     a 390px viewport. -->
+		<link rel="stylesheet" href="./assets/md3ex.css" />
 	</head>
 	<body>
 		<!-- The static shell is complete before a single byte of JSON arrives:

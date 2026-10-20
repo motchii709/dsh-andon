@@ -291,13 +291,14 @@ function renderActivity(state) {
 	const now = Date.now();
 	for (const item of activity.slice(0, 8)) {
 		const sev = item.severity === 'alert' || item.severity === 'warn' ? item.severity : 'ok';
+		const repeat = Number(item.count) > 1 ? ` ×${item.count}` : '';
 		refs.actRows.appendChild(
 			h(
 				'div',
 				{ class: 'arow', dataset: { sev } },
 				h('span', { class: 'atime num', text: fmtDur(now - item.at) }),
 				h('span', { class: 'adot' }),
-				h('span', { class: 'atext', text: clampText(item.text, 110) }),
+				h('span', { class: 'atext', text: clampText(item.text + repeat, 110) }),
 			),
 		);
 	}

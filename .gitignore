@@ -9,3 +9,5 @@ preview.log.err
 .edge-*/
 
 node_modules/
+preview-*.log
+preview-*.err

@@ -172,11 +172,14 @@ test('activity is newest-first, bounded, and never empty of signal', async () =>
 	assert.ok(before > 0);
 
 	for (let i = 0; i < 80; i += 1) {
+		// `workspace/changes` renders `変更 Nファイル`, so each push is a distinct
+		// line. Pushing one identical event 80 times would exercise the repeat
+		// fold (pushActivity) instead of the ring bound this test is about.
 		mock.emit('session/event', mock.sessions[0], {
-			type: 'user/message',
+			type: 'workspace/changes',
 			seq: 100 + i,
 			time: Date.now() + i,
-			data: {},
+			data: { total: i + 1 },
 		});
 	}
 	const activity = collector.snapshot().activity;
@@ -186,7 +189,24 @@ test('activity is newest-first, bounded, and never empty of signal', async () =>
 		assert.equal(typeof line.text, 'string');
 		assert.ok(line.text.length <= 120);
 		assert.ok(['ok', 'warn', 'alert'].includes(line.severity));
+		assert.ok(line.count >= 1, 'every line carries a repeat count');
 	}
+
+	// And the fold itself: the same event repeated inside the window is one line.
+	// The ring is already full here, so folding must not grow it past the bound.
+	const seen = collector.snapshot().activity.length;
+	for (let i = 0; i < 5; i += 1) {
+		mock.emit('session/event', mock.sessions[1], {
+			type: 'assistant/message',
+			seq: 500 + i,
+			time: Date.now() + i,
+			data: {},
+		});
+	}
+	const folded = collector.snapshot().activity;
+	assert.ok(folded.length <= seen, 'folding never exceeds the ring bound');
+	assert.equal(folded[0].text, '応答');
+	assert.equal(folded[0].count, 5, 'five identical lines fold into one counted row');
 
 	collector.dispose();
 });
@@ -387,9 +407,11 @@ test('the plugin registers its routes beside the harness', async () => {
 		'/kanban',
 		'/kanban/',
 		'/andon/assets/tokens.css',
+		'/andon/assets/md3ex.css',
 		'/andon/assets/board.js',
 		'/andon/assets/andon.js',
 		'/kanban/assets/tokens.css',
+		'/kanban/assets/md3ex.css',
 		'/kanban/assets/board.js',
 		'/kanban/assets/kanban.js',
 		'/api/andon/state',
@@ -397,7 +419,7 @@ test('the plugin registers its routes beside the harness', async () => {
 	]) {
 		assert.ok(routes.has(path), `route not registered: ${path}`);
 	}
-	assert.equal(routes.size, 12, 'exactly the intended surface — nothing wildcarded');
+	assert.equal(routes.size, 14, 'exactly the intended surface — nothing wildcarded');
 
 	const bare = await call(routes.get('/andon'), '/andon');
 	assert.equal(bare.status, 302);

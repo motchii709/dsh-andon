@@ -57,9 +57,18 @@ const SCENARIOS = ['alarm', 'busy', 'empty'];
 const VIEWPORTS = [
 	{ tag: 'desk', width: 1920, height: 1080 },
 	{ tag: 'tablet', width: 1024, height: 768 },
+	// Phone is the one that breaks silently, so it is not optional.
+	//
+	// `scale: 2` is a workaround, not a preference. Headless Edge clamps the
+	// real window to a ~500px minimum, so asking for a 390px window lays the
+	// page out at 500 and then crops the screenshot to 390 — which reads as
+	// "the board overflows the phone" even when the CSS is correct. Asking for
+	// a 780px window at device-scale-factor 2 gives a 390 CSS px viewport, and
+	// the capture comes back at 2x for easier inspection.
+	{ tag: 'phone', width: 390, height: 844, scale: 2 },
 ];
 
-async function shoot({ board, scenario, tag, width, height }) {
+async function shoot({ board, scenario, tag, width, height, scale = 1 }) {
 	const file = join(OUT, `${board}-${scenario}-${tag}.png`);
 	const url = `http://127.0.0.1:${PORT}/${board}/?scenario=${scenario}`;
 	const profile = join(tmpdir(), `dsh-andon-shot-${process.pid}-${board}-${scenario}-${tag}`);
@@ -69,8 +78,8 @@ async function shoot({ board, scenario, tag, width, height }) {
 			'--disable-gpu',
 			'--hide-scrollbars',
 			'--no-first-run',
-			'--force-device-scale-factor=1',
-			'--window-size=' + width + ',' + height,
+			'--force-device-scale-factor=' + scale,
+			'--window-size=' + width * scale + ',' + height * scale,
 			'--virtual-time-budget=' + BUDGET,
 			'--user-data-dir=' + profile,
 			'--screenshot=' + file,

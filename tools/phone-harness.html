@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<title>phone viewport harness</title>
+		<!--
+		  Headless Edge clamps its window to ~500 CSS px, so `--window-size=390`
+		  lays the page out at 500 and then crops the image to 390 — which reads
+		  as "the board overflows a phone" when the CSS may be fine. An iframe
+		  is a real viewport: media queries inside it evaluate against the
+		  iframe box, so this harness is the only reliable way to look at 390px.
+
+		  Not part of the product. Open it directly with file://, no server.
+		-->
+		<style>
+			html,
+			body {
+				margin: 0;
+				padding: 0;
+				background: #191919;
+				font: 12px/1.4 system-ui, sans-serif;
+				color: #ccc;
+			}
+			.row {
+				display: flex;
+				gap: 16px;
+				padding: 16px;
+				align-items: flex-start;
+			}
+			figure {
+				margin: 0;
+			}
+			figcaption {
+				padding: 4px 0;
+				color: #888;
+			}
+			iframe {
+				border: 1px solid #555;
+				display: block;
+				background: #000;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="row">
+			<figure>
+				<figcaption>iPhone 12/13/14 — 390 × 844</figcaption>
+				<iframe src="http://127.0.0.1:4173/andon/?scenario=busy" width="390" height="844"></iframe>
+			</figure>
+			<figure>
+				<figcaption>iPhone SE — 375 × 667</figcaption>
+				<iframe src="http://127.0.0.1:4173/andon/?scenario=busy" width="375" height="667"></iframe>
+			</figure>
+			<figure>
+				<figcaption>カンバン 390 × 844</figcaption>
+				<iframe src="http://127.0.0.1:4173/kanban/?scenario=busy" width="390" height="844"></iframe>
+			</figure>
+		</div>
+	</body>
+</html>

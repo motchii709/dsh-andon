@@ -1,0 +1,337 @@
+/* dsh-andon / md3ex.css — Material 3 Expressive layer.
+ *
+ * Loaded after tokens.css and overrides it. tokens.css holds the industrial
+ * substrate (palette, number faces, the andon's paper-white rail); this file
+ * contributes the four things that actually make a layout read as M3
+ * Expressive rather than as a generic dark dashboard:
+ *
+ *   1. the shape scale — containers at xl (28px), controls at full (pill)
+ *   2. tonal surfaces — steps mixed from the same graphite, no new hue
+ *   3. the emphasized type scale — larger, tighter, one axis of contrast
+ *   4. spring motion on press/shape change, nothing else
+ *
+ * What is deliberately NOT here: a violet accent, a gradient brand moment,
+ * glassmorphism, a light theme, or a fourth semantic colour. M3 Expressive is
+ * a shape-and-scale system; it does not require a candy palette. The andon
+ * still has exactly three saturated colours and they still mean
+ * 正常 / 注意 / 要対応.
+ *
+ * Responsive contract (all three devices are first-class):
+ *   phone   < 600px   stacked: field, 2x4 station grid, 2-line ticker
+ *   tablet  600-1099  field over a horizontal station strip
+ *   desktop >= 1100   station rail on the left, field on the right
+ */
+
+:root {
+	/* ── shape scale (M3) ─────────────────────────────────────────────── */
+	--shape-xs: 4px;
+	--shape-s: 8px;
+	--shape-m: 12px;
+	--shape-l: 16px;
+	--shape-xl: 28px;
+	--shape-full: 999px;
+
+	/* ── tonal surface containers, mixed from --panel so the palette
+	 * stays single-hue. Steps are close together on purpose: on a board
+	 * that is up 24/7, contrast between surfaces should be a hint. */
+	--surf-lowest: color-mix(in oklab, var(--panel-3) 100%, white 0%);
+	--surf-low: color-mix(in oklab, var(--panel) 100%, white 3%);
+	--surf: var(--panel);
+	--surf-high: color-mix(in oklab, var(--panel-2) 100%, white 6%);
+	--surf-highest: color-mix(in oklab, var(--panel-2) 100%, white 10%);
+
+	/* ── emphasized type scale ─────────────────────────────────────────
+	 * line-height is tight above 32px (M3 display sizes do this) and eases
+	 * back to 1.4 for body so Japanese copy does not collide. */
+	--type-display-l: clamp(56px, 9vw, 168px);
+	--type-display-m: clamp(40px, 5.2vw, 96px);
+	--type-headline-l: clamp(24px, 2.6vw, 44px);
+	--type-headline-s: clamp(17px, 1.7vw, 26px);
+	--type-title-m: clamp(14px, 1.25vw, 19px);
+	--type-body-m: clamp(13px, 1.05vw, 16px);
+	--type-label-l: clamp(11px, 1vw, 14px);
+	--type-label-s: 11px;
+
+	/* ── motion ────────────────────────────────────────────────────────
+	 * --ease-expressive is M3's emphasized easing; --spring is the
+	 * overshoot used on press. Both are transform/opacity only: a colour
+	 * transition on a status surface is a bug here, because a wall board
+	 * must snap between states (and a headless capture would photograph
+	 * the middle of the fade). */
+	--ease-expressive: cubic-bezier(0.2, 0, 0, 1);
+	--spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+	/* ── state layers ────────────────────────────────────────────────── */
+	--state-hover: 0.08;
+	--state-press: 0.12;
+}
+
+/* The legacy name keeps working: page styles written against --r stay valid. */
+:root {
+	--r: var(--shape-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--ease-expressive: linear;
+		--spring: linear;
+	}
+}
+
+/* ── panels become M3 containers ───────────────────────────────────────── */
+.panel {
+	background: var(--surf-low);
+	border: 1px solid var(--line-soft);
+	border-radius: var(--shape-xl);
+}
+
+.panel-hd {
+	border-radius: var(--shape-xl) var(--shape-xl) 0 0;
+	font-size: var(--type-label-l);
+	letter-spacing: 0.08em;
+}
+
+/* ── chips are pills, and severity is a tonal fill plus a ring ─────────── */
+.chip {
+	border-radius: var(--shape-full);
+	padding: 5px 11px;
+	font-size: var(--type-label-l);
+	letter-spacing: 0.02em;
+}
+
+.chip[data-sev="ok"] {
+	background: color-mix(in oklab, var(--ok) 22%, var(--surf));
+}
+
+.chip[data-sev="warn"] {
+	background: color-mix(in oklab, var(--warn) 22%, var(--surf));
+}
+
+.chip[data-sev="alert"] {
+	background: color-mix(in oklab, var(--alert) 22%, var(--surf));
+}
+
+/* ── CARD / VITAL (kanban) ──────────────────────────────────────────────── */
+.card {
+	border-radius: var(--shape-l);
+}
+
+/* Only the CONTAINER is rounded. Rounding each cell as well cut a dark
+ * diamond out of every seam, because the cells sit flush against each other
+ * with a 1px border-left between them. */
+.vitals {
+	border-radius: var(--shape-l);
+	background: var(--surf-high);
+}
+
+.vital {
+	border-radius: 0;
+	background: transparent;
+}
+
+/* ── ANDON ─────────────────────────────────────────────────────────────────
+ * The field (the saturated colour that IS the alarm) is untouched: it is the
+ * light, not a container. Everything around it takes M3 shape. */
+
+/* Station rail: one M3 container, cells inside it. */
+.rail {
+	background: var(--surf-low);
+	border-radius: var(--shape-xl);
+	overflow: hidden;
+}
+
+/* Each station cell: shape on press only. No colour transition — a station
+ * lighting up is a status change and must be instant. */
+.sr {
+	transition: transform 160ms var(--spring);
+}
+
+.sr:active {
+	transform: scale(0.985);
+}
+
+/* The value is a filled pill. In M3 the value belongs in a tonal container,
+ * and a pill around a 1-2 digit figure is the cheapest way to make eight
+ * rows read as eight switches rather than as a table. */
+.sr-v {
+	border-radius: var(--shape-full);
+	padding: 2px 0.5ch;
+	min-width: 2.6ch;
+	display: inline-flex;
+	justify-content: flex-end;
+}
+
+.sr[data-sev="warn"] .sr-v {
+	background: color-mix(in oklab, var(--warn) 92%, black 0%);
+}
+
+.sr[data-sev="alert"] .sr-v {
+	background: color-mix(in oklab, var(--alert) 92%, black 0%);
+}
+
+/* A cleared station is a tonal chip on the paper, not bare text: the row still
+ * has to look like a control at a glance. */
+.sr[data-sev="ok"] .sr-v,
+.sr[data-sev="off"] .sr-v {
+	background: color-mix(in oklab, black 8%, transparent);
+	color: rgba(0, 0, 0, 0.62);
+}
+
+/* Ticker: one container, rows inside it. No radius on the rows themselves. */
+.ticker {
+	border-radius: var(--shape-xl) var(--shape-xl) 0 0;
+}
+
+.trow {
+	transition: background 120ms var(--ease-expressive);
+}
+
+.trow:hover {
+	background: rgba(255, 255, 255, var(--state-hover));
+}
+
+/* ── PHONE (portrait) ─────────────────────────────────────────────────────
+ * Below 600px the eight stations stop being a rail and become a 2x4 grid of
+ * switches under the field. Eight columns do not fit in 390px without the
+ * labels becoming unreadable, and an unreadable label on a status board is
+ * worse than a status board with one fewer row on screen. */
+@media (max-width: 599px) {
+	#board {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr) auto auto;
+	}
+
+	.rail {
+		grid-row: 2;
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		flex-direction: unset;
+		border-top: 2px solid #000;
+	}
+
+	.sr {
+		border-left: 1px solid rgba(0, 0, 0, 0.42);
+		border-top: 1px solid rgba(0, 0, 0, 0.42);
+		padding: 6px 2px;
+		min-width: 0;
+	}
+
+	/* first row of the grid has no top border inside the container */
+	.sr:nth-child(-n + 4) {
+		border-top: 0;
+	}
+
+	.sr:nth-child(4n + 1) {
+		border-left: 0;
+	}
+
+	/* the index is already implied by grid order on a phone; the label is
+	 * what a passing glance needs */
+	.sr-i {
+		display: none;
+	}
+
+	.sr-l {
+		font-size: var(--type-label-s);
+	}
+
+	.sr-v {
+		font-size: clamp(18px, 5vw, 24px);
+	}
+
+	.field {
+		padding: 14px 16px;
+	}
+
+	/* The clamp() minimums in the page sheet are desktop-sized (word 76px,
+	 * count 96px). At 390px those two alone exceed the viewport and pushed the
+	 * whole board sideways, clipping the station grid and the clock. Keep the
+	 * side-by-side composition — it is the andon idiom — and scale it down. */
+	.field-top {
+		gap: 10px;
+	}
+
+	#status-word {
+		font-size: clamp(40px, 12.5vw, 76px);
+		letter-spacing: 0.01em;
+	}
+
+	#alert-count {
+		font-size: clamp(46px, 15vw, 96px);
+	}
+
+	.counter-u {
+		font-size: 13px;
+	}
+
+	#status-sub {
+		font-size: clamp(15px, 4.2vw, 20px);
+		line-height: 1.3;
+	}
+
+	/* host · uptime sits beside the tag; let it wrap rather than clip. */
+	.field-tag {
+		flex-wrap: wrap;
+		font-size: 11px;
+	}
+
+	.ticker {
+		grid-row: 3;
+	}
+
+	.tick-meta {
+		flex-wrap: wrap;
+		gap: 4px 8px;
+	}
+
+	/* the third call line is the first thing to go when height is scarce */
+	.trow:nth-child(3) {
+		display: none;
+	}
+
+	.ttext {
+		font-size: 14px;
+	}
+
+	.clock {
+		font-size: 20px;
+	}
+
+	/* ── kanban header on a phone ────────────────────────────────────────
+	 * One flex row of brand + LIVE + model + tokens + uptime + clock + jump
+	 * does not fit 390px: the meta items shrink until the labels overlap
+	 * each other. Wrap it, and drop the two facts that only matter at a desk.
+	 * Token totals and process uptime are not actionable from a phone; the
+	 * clock, the connection state and the jump to the andon board are. */
+	.head {
+		flex-wrap: wrap;
+		row-gap: 6px;
+	}
+
+	.head-spacer {
+		display: none;
+	}
+
+	.head-meta {
+		flex: 1 1 100%;
+		flex-wrap: wrap;
+		gap: 6px 14px;
+	}
+
+	.meta-tokens,
+	.meta-uptime {
+		display: none;
+	}
+
+	.brand {
+		font-size: 13px;
+		letter-spacing: 0.1em;
+	}
+}
+
+/* ── TABLET (portrait or small landscape) ──────────────────────────────── */
+@media (min-width: 600px) and (max-width: 1099px) {
+	.rail {
+		border-radius: 0;
+	}
+}

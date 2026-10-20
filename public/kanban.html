@@ -546,6 +546,9 @@
 				}
 			}
 		</style>
+		<!-- Material 3 Expressive layer, loaded last so it can override the
+		     page rules above. See the note in andon.html and md3ex.css. -->
+		<link rel="stylesheet" href="./assets/md3ex.css" />
 	</head>
 	<body>
 		<!-- Full static shell, same principle as /andon: a dead script leaves a
@@ -558,9 +561,9 @@
 				</div>
 				<div class="head-spacer"></div>
 				<div class="head-meta">
-					<span>モデル <span class="v" id="h-model">—</span></span>
-					<span>トークン <span class="v num" id="h-tokens">—</span></span>
-					<span>稼働 <span class="v num" id="h-uptime">—</span></span>
+					<span class="meta-model">モデル <span class="v" id="h-model">—</span></span>
+					<span class="meta-tokens">トークン <span class="v num" id="h-tokens">—</span></span>
+					<span class="meta-uptime">稼働 <span class="v num" id="h-uptime">—</span></span>
 					<span class="num" id="clock">--:--:--</span>
 					<a class="jump" href="/andon">アンドン</a>
 				</div>

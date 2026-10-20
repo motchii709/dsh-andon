@@ -100,7 +100,10 @@ const server = createServer(async (req, res) => {
 		return;
 	}
 
-	const match = /^\/(andon|kanban)\/(assets\/[a-z-]+\.(css|js)|index\.html)?$/u.exec(path);
+	// Digits are allowed in the asset name (`md3ex.css`): the original
+	// [a-z-]+ silently 404'd it, which looked exactly like the stylesheet
+	// failing to apply rather than failing to load.
+	const match = /^\/(andon|kanban)\/(assets\/[a-z0-9-]+\.(css|js)|index\.html)?$/u.exec(path);
 	if (match) {
 		const file = match[2]?.startsWith('assets/') ? match[2].slice('assets/'.length) : `${match[1]}.html`;
 		try {
