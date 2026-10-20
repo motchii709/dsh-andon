@@ -323,6 +323,37 @@ warn  が1つでもある → 「注意」（黄）
 
 ---
 
+### ハーネス側の契約（`@deepseek-ai/*` の型定義で確認済み）
+
+`lib/state.js` は DSH の内部サービスを読む。**この形は推測できない。** 永続化ファイル（`~/.dsh/storages/session-*.json`）の形と実行時のオブジェクトの形は別物であり、テスト用モックは自分で書く以上いくらでも嘘をつける。実際、存在しない `agent.sessionId` を読んでいたため、実機のカンバンはカード0枚のまま、テストは17件すべて緑だった。形を疑ったら `node_modules/@deepseek-ai/*/lib/types/*.d.ts` を先に読む。
+
+| サービス | メンバー | 契約 |
+|---|---|---|
+| `ctx.sessions` | `list(): Session[]` | `session.header` は**常にある**。id は `header.id` |
+| `ctx.agents` | `list(): Agent[]` | エージェントが駆動するセッションは **`agent.session`**（Session そのもの）。`sessionId` フィールドは無い |
+| `ctx.goals` | `get(agent)` | **Agent を渡す** |
+| `ctx.agentTeams` | `remoteView(agent): TeamView` | **Agent を渡す**。同期メソッド（`await` しても害は無い） |
+| `ctx.subagents` | `listChildren(sessionId, signal?)` | **SessionId 文字列**を渡す。Agent ではない |
+| `ctx.sessionProjections` | `stateOf(session, key)` | key は下表の8つだけ |
+| `ctx.sessionQuery` | `listSessions(signal?)` | `SessionRecord[]` |
+| `ctx.workspaceRegistry` | `list()` | 作業ディレクトリの記録 |
+| `ctx.jobs` | `list()` / `onJobsChanged(fn)` | 変化通知は解除関数を返す |
+
+`stateOf` の key は8つ。`SessionProjectionStateMap` は各パッケージが宣言マージで足すため、1ファイルを読んでも全体は見えない。`dsh-agent/lib/types/projection.d.ts` にあるのは `turnBoundary` だけで、残りは別パッケージにある。
+
+| key | 宣言元パッケージ |
+|---|---|
+| `title` | `dsh-session-title` |
+| `todos` | `dsh-tool-todo` |
+| `inbox` | `dsh-agent` |
+| `goal` | `dsh-goal` |
+| `sessionStats` | `dsh-session-stats` |
+| `contextPressure` | `dsh-token-meter` |
+| `tokenUsage` | `dsh-token-meter` |
+| `modelSelection` | `dsh-api-session-controller` |
+
+取れなかった値は `null` や `{}` として静かに流れる。**盤が黙って空になる壊れ方が一番厄介**なので、カードが0枚なのにエージェントが居る場合は、取れたオブジェクトのキー名を `notes` に出す。
+
 ## 6. 実装構成
 
 ```
