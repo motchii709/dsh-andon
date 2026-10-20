@@ -489,3 +489,69 @@ body {
 	color: var(--n-1000);
 }
 
+/* ── アンドン: レールを DSH のリスト行にする ────────────────────────────
+ *
+ * M3 のピルは盤の上では「UI 部品」に見えてしまう。ハーネスの一覧は
+ * チップではなく、淡い索引・ヘアライン・右寄せの数字でできている。
+ * 呼んでいる工程だけが色面のセルになる（そこは機能なので残す）。
+ */
+.rail .sr {
+	background: transparent;
+}
+
+.rail .sr[data-sev='off'] .sr-v,
+.rail .sr[data-sev='ok'] .sr-v {
+	background: transparent;
+	border-radius: 0;
+	padding: 0;
+	min-width: 0;
+	color: var(--n-500);
+}
+
+.rail .sr[data-sev='warn'] .sr-v,
+.rail .sr[data-sev='alert'] .sr-v {
+	border-radius: 6px;
+	padding: 1px 0.4ch;
+	color: var(--n-1000);
+}
+
+/* 工程名はハーネスの本文と同じ濃さ、索引は沈める。 */
+.rail .sr-label {
+	color: var(--n-1000);
+}
+
+.rail .sr-n {
+	color: var(--n-500);
+}
+
+/* 注意: --window-size は「スクショのキャンバス」であって CSS ビューポートではない。
+ * 1600x1200 を頼んだら実体は 756x454 だった。キャンバスがビューポートより
+ * 大きいと、端にページ背景の帯が出る。それはレイアウトの隙間ではない。
+ *
+ * ── 盤はビューポートを所有する ────────────────────────────────────────
+ *
+ * レールの行が詰まったぶん盤全体が縮み、下端に余白が残った。盤は「画面全部」
+ * が前提の道具なので、高さは中身に決めさせない。地の高さを明示し、8工程は
+ * 残りを等分する（行の高さが揃うのは盤として正しい）。 */
+html,
+body {
+	height: 100%;
+}
+
+#board {
+	height: 100dvh;
+	min-height: 0;
+}
+
+.rail {
+	display: flex;
+	flex-direction: column;
+}
+
+.rail .sr {
+	flex: 1 1 0;
+	min-height: 0;
+}
+
+
+
