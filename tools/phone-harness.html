@@ -73,10 +73,20 @@
 			const isPreview = /:4173\b/.test(base);
 			const scenario = params.get('scenario') ?? (isPreview ? 'busy' : '');
 			const suffix = scenario ? `?scenario=${encodeURIComponent(scenario)}` : '';
+			// ?only=andon|kanban keeps a single board on the page. Fewer frames
+			// means fewer that are still skeletons when the shot lands. Note that
+			// --virtual-time-budget accelerates timers while fetches stay real, so
+			// a shot can still catch an unloaded frame: look at the image before
+			// believing it, and re-shoot rather than reading a skeleton as a bug.
+			const only = params.get('only');
 			for (const frame of document.querySelectorAll('iframe[data-board]')) {
+				if (only && frame.dataset.board !== only) {
+					frame.closest('figure').remove();
+					continue;
+				}
 				frame.src = `${base}/${frame.dataset.board}/${suffix}`;
 			}
-			document.title = `phone viewport harness — ${base}`;
+			document.title = `phone viewport harness — ${base}${only ? ` (${only})` : ''}`;
 		</script>
 	</body>
 </html>
