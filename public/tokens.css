@@ -1,0 +1,366 @@
+/* dsh-andon / tokens.css — frozen design tokens + shared primitives.
+ *
+ * Industrial control panel. The ONLY chroma on screen is lamp state
+ * (ok / warn / alert). Do not add a 4th accent, do not add a light theme,
+ * do not change --r. Radius 4px everywhere; circles are lamps only.
+ *
+ * Page-specific layout lives in andon.html / kanban.html <style>. Anything
+ * reusable by both pages belongs here.
+ */
+
+:root {
+	/* surfaces — desaturated graphite, slightly cool */
+	--bg: #0c0e10;
+	--panel: #14181b;
+	--panel-2: #1a1f23;
+	--panel-3: #0f1214;
+	--line: #242a2f;
+	--line-soft: #1d2327;
+
+	/* ink — the two dim steps were measured against --panel at 2.3:1 and
+	 * 3.6:1, both under the 4.5:1 floor for body copy. They are shifted up one
+	 * step; --ink-4 is now decorative-only (hairlines, disabled glass). */
+	--ink: #e9edf0;
+	--ink-2: #bcc5cc;
+	--ink-3: #8b979f;
+	--ink-4: #6e7a83;
+
+	/* semantic — the only saturated colours in the product */
+	--ok: #34c26b;
+	--warn: #e8a13a;
+	--alert: #e5484d;
+	--off: #2f363c;
+
+	/* geometry */
+	--r: 4px;
+	--s1: 4px;
+	--s2: 8px;
+	--s3: 12px;
+	--s4: 16px;
+	--s6: 24px;
+	--s8: 32px;
+	--s12: 48px;
+
+	--font-ui: "Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Kaku Gothic ProN",
+		"Noto Sans JP", system-ui, sans-serif;
+	--font-num: "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Yu Gothic UI",
+		system-ui, sans-serif;
+
+	color-scheme: dark;
+}
+
+* {
+	box-sizing: border-box;
+	min-width: 0;
+}
+
+/* `hidden` must win over every component's own `display`. Without this a
+ * hidden .card-progress still renders its flex track, which is how an empty
+ * grey bar ends up under cards that have no todo list at all. */
+[hidden] {
+	display: none !important;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+	background: var(--bg);
+	color: var(--ink);
+	font-family: var(--font-ui);
+	font-size: 16px;
+	line-height: 1.45;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+body {
+	overflow: hidden;
+}
+
+/* Standardise the tabular-number treatment. Every figure in the product uses
+ * it so digit count never shifts layout. */
+.num {
+	font-family: var(--font-num);
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: "tnum" 1;
+	letter-spacing: 0.01em;
+}
+
+/* ── lamp ─────────────────────────────────────────────────────────────────
+ * Two states only: lit (coloured, glowing) and unlit (dead glass). The glow
+ * is what makes a lit lamp read as a light source rather than a coloured dot;
+ * the top highlight is what makes an unlit one read as physical glass. */
+.lamp {
+	--lamp-size: 44px;
+	width: var(--lamp-size);
+	height: var(--lamp-size);
+	flex: none;
+	border-radius: 50%;
+	position: relative;
+	background: var(--off);
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+		inset 0 -3px 7px rgba(0, 0, 0, 0.55);
+	transition: background 200ms linear, box-shadow 200ms linear;
+}
+
+.lamp::after {
+	content: "";
+	position: absolute;
+	left: 20%;
+	right: 20%;
+	top: 12%;
+	height: 30%;
+	border-radius: 50%;
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
+	pointer-events: none;
+}
+
+.lamp[data-sev="ok"] {
+	background: var(--ok);
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+		0 0 0 5px rgba(52, 194, 107, 0.11),
+		0 0 30px -6px rgba(52, 194, 107, 0.95);
+}
+
+.lamp[data-sev="warn"] {
+	background: var(--warn);
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+		0 0 0 5px rgba(232, 161, 58, 0.11),
+		0 0 30px -6px rgba(232, 161, 58, 0.95);
+}
+
+.lamp[data-sev="alert"] {
+	background: var(--alert);
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.24),
+		0 0 0 5px rgba(229, 72, 77, 0.12),
+		0 0 32px -6px rgba(229, 72, 77, 1);
+}
+
+/* Only the alert lamp is allowed to move, and only to prove the page is alive
+ * and that this is the thing demanding a human. 3s, no flash. */
+@media (prefers-reduced-motion: no-preference) {
+	.lamp[data-breathe="1"] {
+		animation: lamp-breathe 3s ease-in-out infinite;
+	}
+}
+
+@keyframes lamp-breathe {
+	0%,
+	100% {
+		filter: brightness(1);
+	}
+	50% {
+		filter: brightness(0.72);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.lamp {
+		transition: none;
+	}
+}
+
+/* ── text severity helpers ───────────────────────────────────────────────── */
+.sev-ok {
+	color: var(--ok);
+}
+.sev-warn {
+	color: var(--warn);
+}
+.sev-alert {
+	color: var(--alert);
+}
+.sev-idle {
+	color: var(--ink-3);
+}
+
+/* ── panels ──────────────────────────────────────────────────────────────── */
+.panel {
+	background: var(--panel);
+	border: 1px solid var(--line-soft);
+	border-radius: var(--r);
+}
+
+.panel-hd {
+	display: flex;
+	align-items: baseline;
+	gap: var(--s2);
+	padding: var(--s3) var(--s4);
+	border-bottom: 1px solid var(--line-soft);
+	font-size: 13px;
+	letter-spacing: 0.08em;
+	color: var(--ink-2);
+	text-transform: none;
+}
+
+.panel-hd .count {
+	margin-left: auto;
+	font-size: 12px;
+	color: var(--ink-3);
+}
+
+/* ── chip ────────────────────────────────────────────────────────────────── */
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--s1);
+	font-size: 12px;
+	line-height: 1;
+	padding: 4px 7px;
+	border-radius: var(--r);
+	border: 1px solid var(--line);
+	color: var(--ink-2);
+	background: var(--panel-2);
+	white-space: nowrap;
+}
+
+/* Severity is carried by three things at once — border, tint and text — and
+ * every state uses the SAME structure. Earlier the alert chip was filled while
+ * the others were outlined, which read as two different components. Text
+ * colours are picked for contrast on --panel, not for maximum saturation. */
+.chip[data-sev="ok"] {
+	border-color: rgba(52, 194, 107, 0.38);
+	background: rgba(52, 194, 107, 0.1);
+	color: #7fd9a2;
+}
+.chip[data-sev="warn"] {
+	border-color: rgba(232, 161, 58, 0.42);
+	background: rgba(232, 161, 58, 0.1);
+	color: #edbe7c;
+}
+.chip[data-sev="alert"] {
+	border-color: rgba(229, 72, 77, 0.48);
+	background: rgba(229, 72, 77, 0.12);
+	color: #ffb4b6;
+}
+
+/* ── connection dot ──────────────────────────────────────────────────────── */
+.conn {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--s2);
+	font-size: 12px;
+	color: var(--ink-3);
+	white-space: nowrap;
+}
+
+.conn-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--ok);
+	flex: none;
+}
+
+.conn[data-state="stale"] .conn-dot {
+	background: var(--warn);
+}
+
+.conn[data-state="down"] .conn-dot {
+	background: var(--alert);
+}
+
+/* ── empty state ─────────────────────────────────────────────────────────── */
+.empty {
+	color: var(--ink-3);
+	font-size: 14px;
+	padding: var(--s4);
+	text-align: center;
+	border: 1px dashed var(--line);
+	border-radius: var(--r);
+}
+
+/* ── stale treatment: values freeze and grey out, never disappear ────────── */
+[data-stale="1"] .live-value {
+	color: var(--ink-3);
+}
+
+/* ── progress bar (only rendered when a real todo list exists) ───────────── */
+.bar {
+	height: 3px;
+	border-radius: 2px;
+	background: var(--line);
+	overflow: hidden;
+}
+
+.bar > i {
+	display: block;
+	height: 100%;
+	background: var(--ink-2);
+}
+
+.bar[data-sev="alert"] > i {
+	background: var(--alert);
+}
+.bar[data-sev="warn"] > i {
+	background: var(--warn);
+}
+
+/* ── focus: visible, neutral, never a coloured ring ──────────────────────── */
+:focus-visible {
+	outline: 2px solid var(--ink-2);
+	outline-offset: 2px;
+}
+
+/* ── browser surfaces we did not draw ─────────────────────────────────────
+ * Selection, caret and tap highlight are part of the product. Left at the
+ * browser default they are the cheapest tell that a page was assembled rather
+ * than built — and on a permanently-on dark board the stock blue selection
+ * rectangle is glaring. */
+::selection {
+	background: rgba(233, 237, 240, 0.22);
+	color: var(--ink);
+}
+
+html {
+	caret-color: var(--ink);
+	-webkit-tap-highlight-color: rgba(233, 237, 240, 0.1);
+}
+
+a {
+	color: var(--ink);
+	text-decoration-color: var(--ink-4);
+	text-underline-offset: 3px;
+	text-decoration-thickness: 1px;
+}
+
+a:hover {
+	text-decoration-color: var(--ink-2);
+}
+
+/* Touch targets. Both boards are read on tablets; a link or button that is
+ * smaller than 44px is a mis-tap waiting to happen. */
+@media (pointer: coarse) {
+	button,
+	a[role="button"],
+	.link-target {
+		min-height: 44px;
+		min-width: 44px;
+	}
+}
+
+/* ── scrollbars: thin, graphite, no arrows ───────────────────────────────── */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--line) transparent;
+}
+
+*::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+	background: var(--line);
+	border-radius: 4px;
+}
+
+*::-webkit-scrollbar-track {
+	background: transparent;
+}

@@ -1,0 +1,22 @@
+# dsh-andon — bundle patch
+#
+# Mounting this way assumes the package itself is installed (pnpm allowBuilds /
+# a github: or npm dependency in the profile) so that the loader can resolve
+# `dsh-andon` from node_modules. For an uninstalled checkout, insert the file
+# URL directly instead:
+#
+#   - insert:
+#       - id: andon
+#         name: 'file:///C:/Users/<you>/Documents/DSH/playgrounds/dsh-andon/lib/index.js'
+#         config:
+#           exposeOnHarness: true
+#           basePath: /andon
+#           lan:
+#             enabled: false
+#
+# Defaults are deliberate: the boards ride the harness webserver (so whatever
+# already reaches the harness reaches the boards) and the extra LAN listener
+# stays off.
+- insert:
+    - id: andon
+      name: dsh-andon

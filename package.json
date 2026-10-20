@@ -1,0 +1,45 @@
+{
+  "name": "dsh-andon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Two always-on boards for a DeepSeek Harness profile: アンドン (a wall board that only ever says whether the line is stopped) and カンバン (the same state as work columns). Plain HTTP routes on the harness webserver, so any tablet that can reach the harness can leave one on screen.",
+  "keywords": [
+    "cordis",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "andon",
+    "kanban",
+    "dashboard",
+    "wallboard"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "public",
+    "cordis.patch.yml",
+    "DESIGN.md",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test test/",
+    "test:watch": "node --test --watch test/",
+    "preview": "node tools/preview.mjs",
+    "shot": "node tools/shots.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

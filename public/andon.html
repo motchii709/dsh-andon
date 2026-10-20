@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta name="color-scheme" content="dark" />
+		<title>DSH アンドン</title>
+		<link rel="stylesheet" href="./assets/tokens.css" />
+		<style>
+			/* /andon — the wall board itself.
+			 *
+			 * This is an andon, not a dashboard: the SCREEN is the light. One
+			 * saturated field fills the board and its colour IS the status
+			 * (green running / yellow attention / red stopped), carrying
+			 * enormous near-black type the way a real 表示板 carries 05R.
+			 * Nothing here is meant to be read at arm's length.
+			 *
+			 * Three zones, matching a physical アンドン:
+			 *   rail   — the numbered station list; called stations light up
+			 *   field  — the colour and the two numbers (state + count)
+			 *   ticker — what called, and the clock
+			 *
+			 * The dark chrome is only the housing around the light.
+			 * Read DESIGN.md §3.1 for the data contract. */
+
+			html,
+			body {
+				height: 100%;
+				background: #08090a;
+				overflow: hidden;
+			}
+
+			#board {
+				height: 100dvh;
+				display: grid;
+				grid-template-columns: clamp(300px, 23vw, 452px) minmax(0, 1fr);
+				grid-template-rows: minmax(0, 1fr) auto;
+				gap: 10px;
+				padding: 10px;
+				background: #08090a;
+			}
+
+			/* The three states. Near-black type on all of them: on a saturated
+			 * ground black beats white for contrast in every case (green 8.6:1,
+			 * yellow 9.1:1, red 5.1:1), and it is what the real boards do. */
+			#board[data-status="ok"] {
+				--field: var(--ok);
+				--field-ink: #07130c;
+			}
+			#board[data-status="warn"] {
+				--field: var(--warn);
+				--field-ink: #191002;
+			}
+			#board[data-status="alert"] {
+				--field: var(--alert);
+				--field-ink: #1c0507;
+			}
+			body[data-down="1"] #board {
+				--field: #3a4249;
+				--field-ink: #0b0d0e;
+			}
+
+			/* ── rail: the numbered station list ────────────────────────── */
+			/* Black rules on paper white, like the printed station column on a
+			 * real board. A station that is calling gets a solid saturated
+			 * cell — that is the whole point of the list. */
+			.rail {
+				display: flex;
+				flex-direction: column;
+				min-height: 0;
+				background: #e9edf0;
+				border: 2px solid #000;
+				overflow: hidden;
+			}
+
+			.sr {
+				flex: 1 1 0;
+				min-height: 0;
+				display: grid;
+				grid-template-columns: 2.1ch minmax(0, 1fr) auto;
+				align-items: center;
+				gap: clamp(8px, 0.9vw, 16px);
+				padding: 0 clamp(10px, 1.1vw, 20px);
+				border-top: 1px solid rgba(0, 0, 0, 0.42);
+				color: #0c0e10;
+			}
+
+			.sr:first-child {
+				border-top: 0;
+			}
+
+			.sr-i {
+				font-size: clamp(15px, 1.3vw, 28px);
+				color: rgba(0, 0, 0, 0.45);
+				text-align: right;
+			}
+
+			.sr-l {
+				font-size: clamp(16px, 1.5vw, 33px);
+				letter-spacing: 0.06em;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			/* The lit cell. Only the NUMBER takes the colour, not the whole
+			 * row: painting five of eight rows solid made everything look
+			 * equally urgent, which is how a board hides its real alarm. The
+			 * labels stay on paper, so the list is still a readable list. */
+			.sr-v {
+				font-size: clamp(30px, 3vw, 62px);
+				line-height: 1;
+				font-weight: 600;
+				text-align: right;
+				min-width: 3.2ch;
+				padding: 4px 10px;
+				border-radius: 2px;
+			}
+
+			.sr[data-sev="warn"] .sr-v {
+				background: var(--warn);
+				color: #191002;
+			}
+
+			.sr[data-sev="alert"] .sr-v {
+				background: var(--alert);
+				color: #1c0507;
+			}
+
+			.sr[data-sev="warn"] .sr-l,
+			.sr[data-sev="alert"] .sr-l {
+				font-weight: 700;
+			}
+
+			/* A cleared station is grey; a calling one is solid colour. The
+			 * grey still has to be readable — a station list nobody can read
+			 * is decoration. */
+			.sr[data-sev="ok"] .sr-v,
+			.sr[data-sev="off"] .sr-v {
+				color: rgba(0, 0, 0, 0.5);
+			}
+
+			/* ── field: the light ───────────────────────────────────────── */
+			.field {
+				position: relative;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				gap: clamp(14px, 2.4vh, 36px);
+				padding: clamp(20px, 3.4vh, 52px) clamp(24px, 3vw, 60px);
+				background: var(--field);
+				color: var(--field-ink);
+				border: 2px solid #000;
+				overflow: hidden;
+				/* No transition on the colour. An andon snaps; a slow fade
+				 * would also mean a screenshot catches it mid-change. */
+			}
+
+			.field-tag {
+				position: absolute;
+				top: clamp(10px, 1.6vh, 20px);
+				left: clamp(24px, 3vw, 60px);
+				right: clamp(24px, 3vw, 60px);
+				display: flex;
+				justify-content: space-between;
+				gap: 24px;
+				font-size: clamp(13px, 1.1vw, 22px);
+				letter-spacing: 0.14em;
+				opacity: 0.88;
+				white-space: nowrap;
+			}
+
+			.field-top {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: clamp(20px, 2.4vw, 48px);
+				min-width: 0;
+			}
+
+			/* The word. 11.5vw at 1920 = 221px: the single token you read from
+			 * the doorway, and the reason this is not a dashboard. */
+			#status-word {
+				margin: 0;
+				font-size: clamp(76px, 11.5vw, 236px);
+				line-height: 0.92;
+				font-weight: 700;
+				letter-spacing: 0.06em;
+				white-space: nowrap;
+			}
+
+			/* The count, at the same weight — a real board is mostly one
+			 * number, and this is the one. */
+			.counter {
+				display: flex;
+				align-items: baseline;
+				gap: clamp(4px, 0.6vw, 12px);
+				flex: none;
+			}
+
+			#alert-count {
+				font-size: clamp(96px, 14vw, 300px);
+				line-height: 0.8;
+				font-weight: 600;
+				letter-spacing: -0.02em;
+			}
+
+			.counter-u {
+				font-size: clamp(20px, 2vw, 44px);
+				letter-spacing: 0.08em;
+				opacity: 0.7;
+			}
+
+			.counter[data-sev="ok"] #alert-count {
+				opacity: 0.34;
+			}
+
+			#status-sub {
+				margin: 0;
+				/* The line that says WHY the board is lit. It carries the same
+				 * information weight as the state word for anyone who has
+				 * already seen the colour, so it has to survive 3m too —
+				 * thin 50px text was the first thing two independent
+				 * reviewers called unreadable. Heavier weight, bigger size. */
+				font-size: clamp(24px, 3vw, 60px);
+				font-weight: 600;
+				line-height: 1.15;
+				letter-spacing: 0.01em;
+				opacity: 0.94;
+				/* Wraps rather than truncates. An ellipsis here would hide
+				 * one of the three reasons the board is lit, which is the
+				 * one thing this line exists to prevent. */
+				overflow: hidden;
+			}
+
+			/* ── ticker: what called, and the clock ─────────────────────── */
+			.ticker {
+				grid-column: 1 / -1;
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) auto;
+				align-items: center;
+				gap: clamp(16px, 2vw, 40px);
+				padding: clamp(8px, 1.2vh, 16px) clamp(14px, 1.6vw, 26px);
+				background: #0c0e10;
+				border: 2px solid #000;
+				color: var(--ink);
+				min-height: 0;
+			}
+
+			.tick-rows {
+				display: flex;
+				flex-direction: column;
+				gap: 2px;
+				min-width: 0;
+			}
+
+			.trow {
+				display: grid;
+				grid-template-columns: 14px minmax(0, 1fr) auto;
+				align-items: center;
+				gap: clamp(10px, 1vw, 20px);
+				height: clamp(30px, 3.6vh, 44px);
+			}
+
+			.tdot {
+				width: 14px;
+				height: 14px;
+				border-radius: 50%;
+				background: var(--ink-4);
+			}
+
+			.trow[data-sev="ok"] .tdot {
+				background: var(--ok);
+			}
+			.trow[data-sev="warn"] .tdot {
+				background: var(--warn);
+			}
+			.trow[data-sev="alert"] .tdot {
+				background: var(--alert);
+			}
+
+			.ttime {
+				font-size: clamp(14px, 1.4vw, 27px);
+				color: var(--ink-4);
+			}
+
+			.ttext {
+				/* Second layer on purpose: at 3m you read the field, then walk
+				 * two steps in to read what called. Still sized so that a
+				 * pass at arm's length does not need squinting. */
+				font-size: clamp(18px, 2vw, 44px);
+				color: var(--ink-2);
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.trow[data-sev="alert"] .ttext {
+				color: var(--ink);
+			}
+
+			.trow[data-sev="alert"] .ttime {
+				color: var(--ink-2);
+			}
+
+			.tick-meta {
+				display: flex;
+				align-items: center;
+				gap: clamp(12px, 1.4vw, 28px);
+				flex: none;
+			}
+
+			.clock {
+				font-size: clamp(24px, 2.6vw, 52px);
+				line-height: 1;
+				color: var(--ink);
+				letter-spacing: 0.02em;
+			}
+
+			#host {
+				font-size: clamp(12px, 1vw, 18px);
+				/* Inherits the field's ink: the dark theme's grey belongs to
+				 * the dark chrome, and turns to mud on a saturated ground. */
+				color: inherit;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				max-width: 26ch;
+			}
+
+			.conn {
+				font-size: clamp(12px, 1vw, 18px);
+			}
+
+			.more {
+				margin: 0;
+				font-size: clamp(12px, 1vw, 18px);
+				color: var(--ink-3);
+			}
+
+			.notes {
+				grid-column: 1 / -1;
+				margin: 0;
+				font-size: clamp(11px, 0.9vw, 15px);
+				color: var(--ink-4);
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.err {
+				display: none;
+			}
+
+			/* ── narrow tablets: turn the rail into a bottom strip ─────── */
+			@media (max-width: 1100px), (max-height: 620px) {
+				#board {
+					grid-template-columns: minmax(0, 1fr);
+					grid-template-rows: minmax(0, 1fr) auto auto;
+				}
+				.rail {
+					flex-direction: row;
+					grid-row: 2;
+					border-top: 2px solid #000;
+				}
+				.sr {
+					grid-template-columns: minmax(0, 1fr);
+					grid-template-rows: auto auto;
+					justify-items: center;
+					gap: 0;
+					border-top: 0;
+					border-left: 1px solid rgba(0, 0, 0, 0.42);
+					padding: 4px 2px;
+				}
+				.sr:first-child {
+					border-left: 0;
+				}
+				.sr-i {
+					display: none;
+				}
+				.sr-l {
+					font-size: clamp(10px, 1.6vw, 15px);
+				}
+				.sr-v {
+					font-size: clamp(16px, 2.6vw, 26px);
+				}
+				.ticker {
+					grid-row: 3;
+				}
+				#status-word {
+					font-size: clamp(48px, 11vw, 110px);
+				}
+				#alert-count {
+					font-size: clamp(52px, 12vw, 130px);
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<!-- The static shell is complete before a single byte of JSON arrives:
+		     every station label, every placeholder and the whole rail are in
+		     the markup, so a failed script leaves a legible (if empty) board
+		     rather than a blank page. JS only fills values in. -->
+		<main id="board" data-status="ok">
+			<aside class="rail" aria-label="工程">
+				<div class="sr" id="st-needs-you" data-sev="off">
+					<span class="sr-i num">1</span><span class="sr-l">要対応</span
+					><span class="sr-v num live-value">—</span>
+				</div>
+				<div class="sr" id="st-running" data-sev="off">
+					<span class="sr-i num">2</span><span class="sr-l">実行中</span
+					><span class="sr-v num live-value">—</span>
+				</div>
+				<div class="sr" id="st-sessions" data-sev="off">
+					<span class="sr-i num">3</span><span class="sr-l">セッション</span
+					><span class="sr-v num live-value">—</span>
+				</div>
+				<div class="sr" id="st-jobs" data-sev="off">
+					<span class="sr-i num">4</span><span class="sr-l">ジョブ</span
+					><span class="sr-v num live-value">—</span>
+				</div>
+				<div class="sr" id="st-subagents" data-sev="off">
+					<span class="sr-i num">5</span><span class="sr-l">サブ</span
+					><span class="sr-v num live-value">—</span>
+				</div>
+				<div class="sr" id="st-goals" data-sev="off">
+					<span class="sr-i num">6</span><span class="sr-l">目標</span
+					><span class="sr-v num live-value">—</span>
+				</div>
+				<div class="sr" id="st-context" data-sev="off">
+					<span class="sr-i num">7</span><span class="sr-l">文脈</span
+					><span class="sr-v num live-value">—</span>
+				</div>
+				<div class="sr" id="st-errors" data-sev="off">
+					<span class="sr-i num">8</span><span class="sr-l">異常計</span
+					><span class="sr-v num live-value">—</span>
+				</div>
+			</aside>
+
+			<section class="field" aria-label="状態">
+				<div class="field-tag">
+					<span>DSH 状態</span>
+					<span id="host">—</span>
+				</div>
+				<div class="field-top">
+					<h1 id="status-word">—</h1>
+					<div class="counter" id="counter" data-sev="ok">
+						<span class="num" id="alert-count">—</span>
+						<span class="counter-u">件</span>
+					</div>
+				</div>
+				<p id="status-sub">読み込み中</p>
+			</section>
+
+			<footer class="ticker">
+				<div class="tick-rows" id="alert-list"></div>
+				<div class="tick-meta">
+					<div class="conn" id="conn" data-state="ok">
+						<i class="conn-dot"></i><span data-role="conn-label">LIVE</span>
+					</div>
+					<div class="clock num" id="clock">--:--:--</div>
+				</div>
+				<p class="notes" id="notes" hidden></p>
+			</footer>
+		</main>
+
+		<script type="module" src="./assets/andon.js"></script>
+	</body>
+</html>
