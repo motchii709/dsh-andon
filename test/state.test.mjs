@@ -194,10 +194,12 @@ test('activity is newest-first, bounded, and never empty of signal', async () =>
 
 	// And the fold itself: the same event repeated inside the window is one line.
 	// The ring is already full here, so folding must not grow it past the bound.
+	// (`assistant/message` is not recorded at all — it was the event that filled
+	// the ticker with identical rows — so this uses 入力, which is recorded.)
 	const seen = collector.snapshot().activity.length;
 	for (let i = 0; i < 5; i += 1) {
 		mock.emit('session/event', mock.sessions[1], {
-			type: 'assistant/message',
+			type: 'user/message',
 			seq: 500 + i,
 			time: Date.now() + i,
 			data: {},
@@ -205,7 +207,7 @@ test('activity is newest-first, bounded, and never empty of signal', async () =>
 	}
 	const folded = collector.snapshot().activity;
 	assert.ok(folded.length <= seen, 'folding never exceeds the ring bound');
-	assert.equal(folded[0].text, '応答');
+	assert.equal(folded[0].text, '入力');
 	assert.equal(folded[0].count, 5, 'five identical lines fold into one counted row');
 
 	collector.dispose();
