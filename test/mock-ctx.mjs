@@ -87,7 +87,8 @@ export function createMockCtx(overrides = {}) {
 				tokenUsage: { uncachedInputTokens: 184_320, outputTokens: 27_450, cacheReadTokens: 1_204_000, cacheWriteTokens: 96_000 },
 				contextPressure: { projectedTokens: 141_800, pressureTokens: 138_200, contextWindow: 262_144 },
 				inbox: { 'next-turn': [], 'next-step': [{ id: 'q1' }, { id: 'q2' }] },
-				modelSelection: { provider: 'nvnim', model: 'deepseek-v4.1-flash' },
+				// Real shape is { lastUsed, pending } — a wrapper, like goal.
+				modelSelection: { lastUsed: { provider: 'nvnim', model: 'deepseek-v4.1-flash' }, pending: null },
 			},
 		],
 		[
@@ -99,7 +100,8 @@ export function createMockCtx(overrides = {}) {
 				tokenUsage: { uncachedInputTokens: 902_400, outputTokens: 101_200, cacheReadTokens: 4_100_000, cacheWriteTokens: 220_000 },
 				contextPressure: { projectedTokens: 214_000, pressureTokens: 209_500, contextWindow: 262_144 },
 				inbox: { 'next-turn': [], 'next-step': [] },
-				modelSelection: { provider: 'nvnim', model: 'deepseek-v4.1-flash' },
+				// Real shape is { lastUsed, pending } — a wrapper, like goal.
+				modelSelection: { lastUsed: { provider: 'nvnim', model: 'deepseek-v4.1-flash' }, pending: null },
 				// The projection carries GoalProjectionState — a wrapper — while
 				// `ctx.goals.get(agent)` carries the plain Goal. Only the wrapper
 				// path is exercised for this session (its entry is absent from the
@@ -128,7 +130,8 @@ export function createMockCtx(overrides = {}) {
 				tokenUsage: { uncachedInputTokens: 44_100, outputTokens: 6_300, cacheReadTokens: 120_000, cacheWriteTokens: 12_000 },
 				contextPressure: { projectedTokens: 61_200, pressureTokens: 58_900, contextWindow: 262_144 },
 				inbox: { 'next-turn': [{ id: 'm1' }], 'next-step': [] },
-				modelSelection: { provider: 'nvnim', model: 'deepseek-v4.1-flash' },
+				// Real shape is { lastUsed, pending } — a wrapper, like goal.
+				modelSelection: { lastUsed: { provider: 'nvnim', model: 'deepseek-v4.1-flash' }, pending: null },
 			},
 		],
 	]);

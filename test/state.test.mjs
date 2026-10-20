@@ -524,3 +524,14 @@ test('a running agent with an active goal is 実行中, not 待機', async () =>
 	assert.equal(card.statusLabel, '実行中');
 	assert.ok(!card.badges.includes('解除済み'), 'an armed goal is not marked disarmed');
 });
+
+test('the model line survives the modelSelection wrapper', async () => {
+	const { collector } = await collectorFor();
+	const snap = collector.snapshot();
+
+	// `modelSelection` is another wrapper (`{ lastUsed, pending }`). Reading
+	// `.provider` off it yields nothing, so the header silently loses its model
+	// line — the same failure the goal wrapper caused, one field over.
+	assert.match(snap.vitals.model, /nvnim/);
+	assert.match(snap.cards.find((c) => c.id === 'session:ses_andon0001').detail.model, /nvnim/);
+});
