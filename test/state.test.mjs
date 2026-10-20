@@ -491,3 +491,36 @@ test('config can move the base path and the LAN listener stays off by default', 
 	assert.ok(routes.has('/wall/assets/tokens.css'));
 	assert.equal(routes.has('/andon/'), false);
 });
+
+test('a goal reached only through the projection wrapper still lands in the right column', async () => {
+	const { collector } = await collectorFor();
+	const snap = collector.snapshot();
+	const card = snap.cards.find((c) => c.id === 'session:ses_bridge0002');
+	assert.ok(card, 'the session whose goal comes only from the projection has a card');
+
+	// `stateOf(session, 'goal')` returns GoalProjectionState (`{ current, ... }`),
+	// not the goal itself. Before the unwrap, `.phase` was undefined, so this card
+	// fell through every branch into 待機 while its label still read 実行中 — the
+	// board contradicted itself and no test noticed, because the fixture had no
+	// `goal` projection at all.
+	assert.equal(card.column, 'alert', 'a blocked goal is actionable, not queued');
+	assert.equal(card.statusLabel, '遮断');
+	assert.equal(card.severity, 'alert');
+	assert.match(card.title, /姿勢推定/, 'the wrapper was unwrapped far enough to read the objective');
+	assert.ok(card.badges.includes('目標'));
+
+	// The counters and the cards must agree about how many goals exist: the
+	// projection path counts too, or the andon and the kanban disagree.
+	assert.equal(snap.counts.goalsBlocked, 1);
+	assert.equal(snap.counts.goalsActive, 1);
+});
+
+test('a running agent with an active goal is 実行中, not 待機', async () => {
+	const { collector } = await collectorFor();
+	const snap = collector.snapshot();
+	const card = snap.cards.find((c) => c.id === 'session:ses_andon0001');
+	assert.ok(card);
+	assert.equal(card.column, 'running');
+	assert.equal(card.statusLabel, '実行中');
+	assert.ok(!card.badges.includes('解除済み'), 'an armed goal is not marked disarmed');
+});

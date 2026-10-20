@@ -100,6 +100,23 @@ export function createMockCtx(overrides = {}) {
 				contextPressure: { projectedTokens: 214_000, pressureTokens: 209_500, contextWindow: 262_144 },
 				inbox: { 'next-turn': [], 'next-step': [] },
 				modelSelection: { provider: 'nvnim', model: 'deepseek-v4.1-flash' },
+				// The projection carries GoalProjectionState — a wrapper — while
+				// `ctx.goals.get(agent)` carries the plain Goal. Only the wrapper
+				// path is exercised for this session (its entry is absent from the
+				// `goals` map below), so a regression in the unwrap shows up as
+				// this card falling into the wrong column.
+				goal: {
+					current: {
+						id: 'goal-bridge',
+						objective: 'スマホ側の姿勢推定を安定させる',
+						phase: 'blocked',
+						activation: 'armed',
+						blockedReason: { code: 'WAITING_HUMAN', message: '実機のジャイロ値が必要' },
+						updatedAt: NOW - 26 * MIN,
+					},
+					seenGoalIds: ['goal-bridge'],
+					failure: null,
+				},
 			},
 		],
 		[
@@ -137,17 +154,9 @@ export function createMockCtx(overrides = {}) {
 				updatedAt: NOW - 4 * MIN,
 			},
 		],
-		[
-			'ses_bridge0002',
-			{
-				id: 'goal-bridge',
-				objective: 'スマホ側の姿勢推定を安定させる',
-				phase: 'blocked',
-				activation: 'armed',
-				blockedReason: { code: 'WAITING_HUMAN', message: '実機のジャイロ値が必要' },
-				updatedAt: NOW - 26 * MIN,
-			},
-		],
+		// `ses_bridge0002` is deliberately absent: its goal reaches the board only
+		// through the projection wrapper, which is the case that used to land in
+		// the wrong column.
 	]);
 
 	const jobs = [
