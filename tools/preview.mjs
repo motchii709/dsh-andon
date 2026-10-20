@@ -59,6 +59,26 @@ function snapshotFor() {
 			notes: [],
 		};
 	}
+	if (scenario === 'quiet') {
+		// The state the board actually sits in most of the day: nothing calling,
+		// but the harness is working. This is where the ticker falls back from
+		// the alert queue to the activity ring, so it is the only way to see
+		// what the ticker says when nobody is shouting. The 応答 row that filled
+		// every line on the live board only ever appeared in this mode, which
+		// none of busy/alarm/empty reproduced.
+		return {
+			...base,
+			status: 'ok',
+			alerts: [],
+			cards: base.cards.filter((card) => card.column !== 'alert'),
+			stations: base.stations.map((s) => ({
+				...s,
+				severity: 'ok',
+				value: s.id === 'needs-you' || s.id === 'jobs' || s.id === 'errors' ? 0 : s.value,
+			})),
+			// activity is kept on purpose — that is the whole point of the mode.
+		};
+	}
 	if (scenario === 'alarm') {
 		return {
 			...base,
@@ -121,5 +141,5 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
 	console.log(`[dsh-andon preview] http://${HOST}:${PORT}/andon/`);
 	console.log(`[dsh-andon preview] http://${HOST}:${PORT}/kanban/`);
-	console.log('[dsh-andon preview] ?scenario=empty | busy | alarm');
+	console.log('[dsh-andon preview] ?scenario=empty | quiet | busy | alarm');
 });

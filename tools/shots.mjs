@@ -53,7 +53,7 @@ if (!EDGE) {
 
 /** Board, scenario, and the two viewports worth checking. */
 const BOARDS = ['andon', 'kanban'];
-const SCENARIOS = ['alarm', 'busy', 'empty'];
+const SCENARIOS = ['alarm', 'busy', 'quiet', 'empty'];
 const VIEWPORTS = [
 	{ tag: 'desk', width: 1920, height: 1080 },
 	{ tag: 'tablet', width: 1024, height: 768 },

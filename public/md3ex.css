@@ -133,9 +133,13 @@
  * The field (the saturated colour that IS the alarm) is untouched: it is the
  * light, not a container. Everything around it takes M3 shape. */
 
-/* Station rail: one M3 container, cells inside it. */
+/* Station rail: one M3 container, cells inside it.
+ *
+ * Shape only — NOT surface. The rail is paper-white on purpose: it is the
+ * printed board the station rows sit on, and repainting it with an M3 tonal
+ * surface (`--surf-low`) turned the whole list into dark-on-dark text that
+ * nobody could read. M3 contributes the corner radius here and nothing else. */
 .rail {
-	background: var(--surf-low);
 	border-radius: var(--shape-xl);
 	overflow: hidden;
 }
