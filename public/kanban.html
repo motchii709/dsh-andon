@@ -537,6 +537,20 @@
 			@media (max-width: 760px) {
 				.cols {
 					grid-template-columns: minmax(0, 1fr);
+					/* Stacked columns must take their natural height and let the
+					 * stack scroll. Without this the four rows share the board's
+					 * remaining height (`.cols` is the 1fr row of #board), so each
+					 * column collapsed to a header plus a few pixels of internally
+					 * scrolling body — on a phone the cards were unreachable, and
+					 * the board showed counts with nothing to read. */
+					grid-auto-rows: min-content;
+					align-content: start;
+					overflow-y: auto;
+					overscroll-behavior: contain;
+				}
+				.col,
+				.col-body {
+					overflow: visible;
 				}
 				.vitals {
 					flex-wrap: wrap;

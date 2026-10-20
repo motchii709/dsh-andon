@@ -10,6 +10,14 @@
 		  is a real viewport: media queries inside it evaluate against the
 		  iframe box, so this harness is the only reliable way to look at 390px.
 
+		  Query parameters:
+		    ?base=http://<LAN-IP>:3090   point at the live host instead of
+		                                      the preview server
+		    ?scenario=quiet                   preview scenarios only; omitted
+		                                      automatically for any non-preview
+		                                      base, because the live host has
+		                                      real data and no scenario switch
+
 		  Not part of the product. Open it directly with file://, no server.
 		-->
 		<style>
@@ -45,16 +53,30 @@
 		<div class="row">
 			<figure>
 				<figcaption>iPhone 12/13/14 — 390 × 844</figcaption>
-				<iframe src="http://127.0.0.1:4173/andon/?scenario=busy" width="390" height="844"></iframe>
+				<iframe data-board="andon" width="390" height="844"></iframe>
 			</figure>
 			<figure>
 				<figcaption>iPhone SE — 375 × 667</figcaption>
-				<iframe src="http://127.0.0.1:4173/andon/?scenario=busy" width="375" height="667"></iframe>
+				<iframe data-board="andon" width="375" height="667"></iframe>
 			</figure>
 			<figure>
 				<figcaption>カンバン 390 × 844</figcaption>
-				<iframe src="http://127.0.0.1:4173/kanban/?scenario=busy" width="390" height="844"></iframe>
+				<iframe data-board="kanban" width="390" height="844"></iframe>
 			</figure>
 		</div>
+		<script>
+			const params = new URLSearchParams(location.search);
+			const base = params.get('base') ?? 'http://127.0.0.1:4173';
+			// ?scenario= is a preview-only concept. The live host serves real
+			// state, so appending one there would change nothing but still imply
+			// the shot came from a fixture.
+			const isPreview = /:4173\b/.test(base);
+			const scenario = params.get('scenario') ?? (isPreview ? 'busy' : '');
+			const suffix = scenario ? `?scenario=${encodeURIComponent(scenario)}` : '';
+			for (const frame of document.querySelectorAll('iframe[data-board]')) {
+				frame.src = `${base}/${frame.dataset.board}/${suffix}`;
+			}
+			document.title = `phone viewport harness — ${base}`;
+		</script>
 	</body>
 </html>
