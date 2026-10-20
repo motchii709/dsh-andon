@@ -310,31 +310,10 @@
 				flex: none;
 			}
 
-			/* The way across to the kanban. It lives on the black ticker, not on
-			 * the colour field, so the wall stays a single saturated plane. Sits
-			 * first in the meta group so the clock keeps the right edge, and is
-			 * sized to stay a real touch target on a phone. */
-			.jump {
-				display: inline-flex;
-				align-items: center;
-				justify-content: center;
-				min-height: clamp(38px, 5vh, 46px);
-				padding: 0 clamp(12px, 1.2vw, 22px);
-				border: 1px solid rgba(255, 255, 255, 0.24);
-				border-radius: 999px;
-				color: var(--ink-2);
-				font-size: clamp(13px, 1.1vw, 20px);
-				letter-spacing: 0.08em;
-				text-decoration: none;
-				white-space: nowrap;
-			}
-
-			.jump:hover,
-			.jump:focus-visible {
-				color: var(--ink);
-				background: rgba(255, 255, 255, 0.1);
-				border-color: rgba(255, 255, 255, 0.45);
-			}
+			/* The kanban board is no longer part of this product: there are
+			 * better kanban tools and the andon is the thing worth keeping. Its
+			 * page still answers on /kanban/ for anyone who bookmarked it, but
+			 * the andon does not point at it any more. */
 
 			.clock {
 				font-size: clamp(24px, 2.6vw, 52px);
@@ -487,7 +466,6 @@
 			<footer class="ticker">
 				<div class="tick-rows" id="alert-list"></div>
 				<div class="tick-meta">
-					<a class="jump" href="../kanban/">カンバン</a>
 					<div class="conn" id="conn" data-state="ok">
 						<i class="conn-dot"></i><span data-role="conn-label">LIVE</span>
 					</div>

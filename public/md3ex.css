@@ -339,3 +339,153 @@
 		border-radius: 0;
 	}
 }
+
+/* dsh.css — DSH と同じ見た目にするための層
+ *
+ * 盤はハーネスの隣に一日中出ている。だから盤の「枠」はハーネスの枠と同じで
+ * あってほしい。色・書体・線・角丸をハーネス本体から写す。
+ *
+ * 値の出どころは推測ではなく実物:
+ *   @deepseek-ai/dsh-client-ui-theme/lib/client.js
+ *     --dsw-static-neutral-bluish-*  … 下の --n-* にそのまま写した
+ *     --dsw-alias-border-l1/l2       … 黒の低アルファ 1px 罫線
+ *     --dsw-alias-button-info-fill   … #4176e6（青はここだけ）
+ *   DSH の UI はライト。地は白系、文字はほぼ黒(#0f1115)、主ボタンもほぼ黒。
+ *
+ * 読み込み順: tokens.css → ページ内 <style> → md3ex.css → dsh.css
+ * md3ex.css は配置・ブレークポイント・モーションを持ち続ける。
+ * このファイルは色・書体・罫線・角丸だけを持つ。役割を混ぜない。
+ *
+ * 色面（緑・黄・赤）は触らない。あれは装飾ではなく盤の機能そのもので、
+ * 本物のアンドンもそうなっている。
+ */
+
+:root {
+	/* --dsw-static-neutral-bluish-* */
+	--n-00: #fff;
+	--n-50: #f9fafb;
+	--n-75: #f1f3f5;
+	--n-100: #ebeef2;
+	--n-150: #e9ecf2;
+	--n-200: #e1e5ee;
+	--n-300: #cfd3d6;
+	--n-400: #adb2b8;
+	--n-500: #979da6;
+	--n-600: #81858c;
+	--n-700: #61666b;
+	--n-750: #43454a;
+	--n-800: #353638;
+	--n-850: #2c2c2e;
+	--n-900: #1b1b1c;
+	--n-950: #151517;
+	--n-1000: #0f1115;
+
+	/* --dsw-alias-* */
+	--ds-line-1: rgba(0, 0, 0, 0.1);
+	--ds-line-2: rgba(0, 0, 0, 0.16);
+	--ds-line-soft: rgba(0, 0, 0, 0.06);
+	--ds-accent: #4176e6;
+	--ds-radius: 12px;
+
+	/* 本文はハーネスと同じ系。和文は各OSの標準に落とす。 */
+	--ds-font:
+		-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, 'Yu Gothic UI',
+		'Hiragino Sans', Meiryo, sans-serif;
+	--ds-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, Menlo, monospace;
+}
+
+/* ── 地と書体 ───────────────────────────────────────────────────────── */
+
+html,
+body,
+#board {
+	background: var(--n-950);
+}
+
+body {
+	font-family: var(--ds-font);
+	-webkit-font-smoothing: antialiased;
+}
+
+/* 数字は等幅のまま（桁が揺れると盤が落ち着かない） */
+.num,
+.clock,
+.sr-v {
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── アンドン: レール（工程リスト）──────────────────────────────────── */
+
+.rail {
+	background: var(--n-150);
+	border: 1px solid var(--ds-line-1);
+}
+
+.sr {
+	color: var(--n-1000);
+	border-bottom: 1px solid var(--ds-line-soft);
+}
+
+.sr:last-child {
+	border-bottom: 0;
+}
+
+.sr-n {
+	color: var(--n-500);
+}
+
+/* 平常時の値は無彩色の小さなチップ。呼んでいる工程だけ色面で塗る
+ * （md3ex.css の data-sev 指定がそのまま効く）。 */
+.sr-v {
+	background: var(--n-200);
+	color: var(--n-1000);
+}
+
+/* ── アンドン: チッカー（何が呼んだか・時計）────────────────────────── */
+
+.ticker {
+	background: var(--n-1000);
+	border-radius: var(--ds-radius);
+}
+
+.ttime {
+	color: var(--n-600);
+}
+
+.ttext {
+	color: var(--n-300);
+}
+
+.trow[data-sev='alert'] .ttext {
+	color: var(--n-00);
+}
+
+.clock {
+	color: var(--n-00);
+}
+
+/* ── カンバン: 枠まわり ─────────────────────────────────────────────── */
+
+.panel,
+.vitals,
+.col {
+	border: 1px solid var(--ds-line-1);
+	border-radius: var(--ds-radius);
+}
+
+/* ハーネスの「浮いた白ボタン」相当。盤の中では一番目立つ操作なので
+ * 白地・ほぼ黒文字で置く。 */
+.jump {
+	background: var(--n-00);
+	color: var(--n-1000);
+	border: 1px solid var(--ds-line-2);
+	border-radius: 10px;
+	font-family: var(--ds-font);
+}
+
+.jump:hover,
+.jump:focus-visible {
+	background: var(--n-100);
+	color: var(--n-1000);
+}
+
