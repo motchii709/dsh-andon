@@ -116,10 +116,14 @@ export function createMockCtx(overrides = {}) {
 		],
 	]);
 
+	// The real `Agent` exposes the session it drives as `agent.session`
+	// (dsh-agent/lib/types: `readonly session: Session`). There is no
+	// `sessionId` field. This fixture used to invent one, so every test passed
+	// while the live board built zero cards — the shape below is the contract.
 	const agents = [
-		{ sessionId: 'ses_andon0001', status: 'running' },
-		{ sessionId: 'ses_bridge0002', status: 'idle' },
-		{ sessionId: 'ses_repo000003', status: 'idle' },
+		{ session: s1, status: 'running' },
+		{ session: s2, status: 'idle' },
+		{ session: s3, status: 'idle' },
 	];
 
 	const goals = new Map([
@@ -179,7 +183,7 @@ export function createMockCtx(overrides = {}) {
 			roots: () => agents,
 		},
 		goals: {
-			get: (agent) => goals.get(agent?.sessionId) ?? null,
+			get: (agent) => goals.get(agent?.session?.header?.id ?? agent?.sessionId) ?? null,
 		},
 		sessionProjections: {
 			stateOf: (session, key) => projections.get(session?.header?.id)?.[key],
@@ -209,7 +213,7 @@ export function createMockCtx(overrides = {}) {
 		},
 		agentTeams: {
 			remoteView: async (agent) =>
-				agent?.sessionId === 'ses_andon0001'
+				(agent?.session?.header?.id ?? agent?.sessionId) === 'ses_andon0001'
 					? { members: [], tasks: teamTasks }
 					: { members: [], tasks: [] },
 		},
