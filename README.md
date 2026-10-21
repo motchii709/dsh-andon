@@ -21,7 +21,7 @@ DSH (DeepSeek Harness) の稼働状態を、常時点灯させておくアンド
 | 2 | 各ページの `<style>` | レイアウトの骨格とブレークポイント |
 | 3 | `public/md3ex.css` | M3 Expressive の形・モーション + **末尾に DSH 層** |
 
-DSH 層の色は推測ではなくハーネス本体から写している（`@deepseek-ai/dsh-client-ui-theme/lib/client.js` の `--dsw-static-neutral-bluish-*`）。地 `#151517` / レール `#e9ecf2` / チッカー `#0f1115` / 書体はハーネスと同じ系 / 罫線は黒10% / 角丸12px。**色面（緑・黄・赤）は DSH 層でも触らない** — あれは装飾ではなく盤の機能そのもの。
+DSH 層の色は推測ではなくハーネス本体から写している（`@deepseek-ai/dsh-client-ui-theme/lib/client.js` の `--dsw-static-neutral-bluish-*`）。地 `#151517` / レール `#e9ecf2` / チッカー `#0f1115` / 書体はハーネスと同じ系 / 罫線は黒10% / 角丸12px。**色面（緑・黄・赤）は DSH 層でも触らない。** あれは盤の機能そのもので、装飾として扱うと盤が読めなくなる。
 
 ## 2枚の盤
 
