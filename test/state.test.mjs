@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
 
 import { createCollector } from '../lib/state.js';
 import { apply as applyPlugin } from '../lib/index.js';
@@ -553,4 +554,29 @@ test('token totals survive the tokenUsage state wrapper', async () => {
 		card.metrics.some((m) => m.label === 'トークン'),
 		'the card shows a token metric',
 	);
+});
+
+test('every asset a page references has a route that serves it', async () => {
+	// Adding a stylesheet means touching the explicit route table in lib/index.js
+	// AND the preview server's own allowlist. Miss either and the browser gets a
+	// 404 that looks exactly like "the CSS does nothing" — which cost real time
+	// twice (md3ex.css, then dsh.css). This walks the pages instead of trusting
+	// anyone to remember.
+	const { routes } = await mountPlugin();
+	const pages = ['andon', 'kanban'];
+
+	for (const page of pages) {
+		const html = readFileSync(new URL(`../public/${page}.html`, import.meta.url), 'utf8');
+		const refs = new Set(
+			[...html.matchAll(/\.\/assets\/([a-z0-9-]+\.(?:css|js))/g)].map((m) => m[1]),
+		);
+		assert.ok(refs.size > 0, `${page}.html references no assets at all — the regex broke`);
+
+		for (const ref of refs) {
+			assert.ok(
+				routes.has(`/${page}/assets/${ref}`),
+				`${page}.html asks for ./assets/${ref} but no route serves it`,
+			);
+		}
+	}
 });
