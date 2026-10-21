@@ -117,6 +117,14 @@ Google Fonts を `@import` しない（LAN内・オフラインで動く必要�
 - モーションは押下時のスプリングのみ。**状態色に transition を掛けない**（アンドンは瞬時に切り替わる）。
 - `md3ex.css` は**インライン `<style>` より後**に読み込む。前に置くとページ側の `@media (max-width:1100px)` に負けてスマホ用ルールが効かない。
 
+**DSH 層**が同じ `md3ex.css` の末尾に居座り、色・書体・罫線・角丸だけを持つ（配置・ブレークポイント・モーションは M3 層のまま）。盤はハーネスの隣に一日中出るので、枠はハーネスの枠と同じにしてある。
+
+- 値は推測せずハーネス本体から写す: `@deepseek-ai/dsh-client-ui-theme/lib/client.js` の `--dsw-static-neutral-bluish-*`。DSH の UI はライトで、地は白系、文字はほぼ黒 `#0f1115`、罫線は黒の 10〜16%、角丸 12px、青 `#4176e6` は情報アクセントのみ。
+- 盤での割り当て: 地 `#151517` / レール `#e9ecf2` / チッカー `#0f1115`。
+- **平常時の工程値はチップではなく右寄せの数字**。ハーネスの一覧はチップでできていないし、ピルは盤の上で「UI 部品」に見える。呼んでいる工程だけが色面のセルになる。
+- **色面（緑・黄・赤）は DSH 層でも触らない。** あれは盤の機能そのもので、装飾として扱うと盤が読めなくなる。
+- 層を足すときの注意: 存在しないクラス名に書くと静かに no-op になる（`.sr-n` / `.sr-label` でやった。正は `.sr-i` / `.sr-l`）。`flex-direction` のように他の幅で意味が変わるプロパティを無条件に上書きしない（1100px 以下でレールが下段の横一列になる設計を潰した）。
+
 `100dvh` の `grid`。**スクロールバーを出さない**（`overflow:hidden`）。3ゾーン。
 
 ```
@@ -244,9 +252,9 @@ warn  が1つでもある → 「注意」（黄）
 |---|---|---|
 | GET | `/andon` | `/andon/` へ 302 |
 | GET | `/andon/` | `andon.html` |
-| GET | `/kanban` | `/kanban/` へ 302 |
-| GET | `/kanban/` | `kanban.html` |
-| GET | `/<盤>/assets/<file>` | `public/<file>`（`tokens.css` `board.js` `andon.js` `kanban.js` のみ） |
+| GET | `/kanban` | `/kanban/` へ 302（互換のため残置。主役ではない） |
+| GET | `/kanban/` | `kanban.html`（同上） |
+| GET | `/<盤>/assets/<file>` | `public/<file>`（`tokens.css` `md3ex.css` `board.js` `andon.js` `kanban.js` のみ） |
 | GET | `/api/andon/state` | 下記 JSON。`cache-control: no-store` |
 | GET | `/api/andon/health` | `{"ok":true,"uptimeSec":n}` |
 | GET | `/` (LANリスナーのみ) | `/andon/` へ 302 |
@@ -368,23 +376,31 @@ dsh-andon/
   public/
     tokens.css            # 凍結済みデザイントークン（変更禁止・追記のみ）
     md3ex.css             # M3 Expressive 層（形状・トーン・活字・モーション・
-                          #   3デバイスのブレークポイント）。インライン <style> の後に読む
+                          #   3デバイスのブレークポイント）+ 末尾に DSH 層
+                          #   （色・書体・罫線・角丸）。インライン <style> の後に読む
     board.js              # 共通クライアント（ポーリング・時刻・数値・DOM生成）
-    andon.html / andon.js
-    kanban.html / kanban.js
+    andon.html / andon.js # 本体
+    kanban.html / kanban.js  # 主役ではない。/kanban/ はブックマーク互換で残置
+  docs/
+    andon-desktop.png     # README 用。モックデータで撮るので実データは写らない
+    andon-phone.png
   test/
     state.test.mjs        # 偽 ctx で state.js を検証（node標準 assert のみ）
     mock-ctx.mjs          # 偽 ctx フィクスチャ + settle()
   tools/
     preview.mjs           # スタンドアロン確認サーバー（モックデータ・?scenario=）
-    shots.mjs             # ヘッドレス Edge で 3ビューポート × 2盤 × 3シナリオを撮る
+    shots.mjs             # ヘッドレス Edge で 3ビューポート × 2盤 × 4シナリオを撮る
     phone-harness.html    # 390px 実寸の確認用。iframe は本物のビューポートなので
-                          #   headless Edge の最小ウィンドウ幅に騙されない
+                          #   headless Edge の最小ウィンドウ幅に騙されない。
+                          #   ?base= で実機に向け、?only= で1盤だけ撮る
 ```
 
 - 資産は**2箇所の許可リストに登録が必要**: `lib/index.js` の明示テーブルと、
   `tools/preview.mjs` の正規表現。片方だけ足すと 404 になり、
-  「CSS が効かない」ように見える（実際に `md3ex.css` で起きた）。
+  「CSS が効かない」ように見える（実際に `md3ex.css` と `dsh.css` で起きた）。
+  いまは `test/state.test.mjs` の「ページが参照する資産に必ずルートがある」検査が
+  この取りこぼしを止める。**新しい CSS は新しいルート**なので、走っているホストには
+  再起動まで配られない — だから見た目の変更は既にルートのある `md3ex.css` に入れる。
 - `tools/preview.mjs` は `lib/state.js` を**起動時に import** する。state.js を変えたら
   プレビューサーバーの再起動が要る。古いモジュールが残ると数字だけ古い、という
   分かりにくい壊れ方をする。
