@@ -119,6 +119,31 @@ test('status is the worst station severity', async () => {
 	quiet.collector.dispose();
 });
 
+test('context pressure alone drives the board colour, 75% is 注意 and 90% is 異常', async () => {
+	// The whole product is one colour. The 75% line is the only way the board
+	// turns yellow, so both thresholds are worth pinning: a boundary that drifts
+	// silently turns a warning into a calm green wall nobody looks at.
+	const collect = async (tokens) => {
+		const { collector } = await collectorFor({
+			sessionProjections: {
+				stateOf: (session, key) =>
+					key === 'contextPressure' ? { projectedTokens: tokens, contextWindow: 262144 } : undefined,
+			},
+		});
+		const snap = collector.snapshot();
+		collector.dispose();
+		return snap;
+	};
+
+	const warn = await collect(216_000); // 82%
+	assert.equal(warn.stations.find((s) => s.id === 'context').severity, 'warn');
+	assert.equal(warn.stations.find((s) => s.id === 'context').value, 82);
+
+	const alert = await collect(249_000); // 95%
+	assert.equal(alert.stations.find((s) => s.id === 'context').severity, 'alert');
+	assert.equal(alert.status, 'alert', 'a single station at alert lifts the whole board');
+});
+
 /* ── approvals are folded out of the session log ────────────────────────── */
 
 test('pending approvals are derived by folding the log backwards', async () => {
