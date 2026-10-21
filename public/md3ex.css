@@ -515,13 +515,26 @@ body {
 	color: var(--n-1000);
 }
 
-/* 工程名はハーネスの本文と同じ濃さ、索引は沈める。 */
-.rail .sr-label {
+/* 工程名はハーネスの本文と同じ濃さ、索引は沈める。
+ *
+ * 注意: 実際のクラス名は .sr-i（索引）と .sr-l（工程名）で、.sr-n /
+ * .sr-label は存在しない。最初そこへ書いて no-op になった。CSS を足したら
+ * その選択子が本当に何かに当たっているか疑うこと。 */
+.rail .sr {
 	color: var(--n-1000);
+	/* ページ側は rgba(0,0,0,0.42) の強い罫線。ハーネスは 10〜16% なので、
+	 * 行の区切りも同じ濃さに落とす。 */
+	border-top: 1px solid var(--ds-line-1);
 }
 
-.rail .sr-n {
+.rail .sr-i {
 	color: var(--n-500);
+	letter-spacing: 0;
+}
+
+.rail .sr-l {
+	letter-spacing: 0.02em;
+	font-weight: 500;
 }
 
 /* 注意: --window-size は「スクショのキャンバス」であって CSS ビューポートではない。
@@ -543,11 +556,10 @@ body {
 	min-height: 0;
 }
 
-.rail {
-	display: flex;
-	flex-direction: column;
-}
-
+/* 8工程は与えられた長さを等分する。flex-direction はここで決めないこと:
+ * 1100px 以下ではレールが「下段の横一列」に変わるので、ここで column を
+ * 固定すると 8行が細い帯の中で縦に潰れ、文字が重なって読めなくなる
+ * （1024x768 で実際にそうなった）。行の伸び方だけを指定する。 */
 .rail .sr {
 	flex: 1 1 0;
 	min-height: 0;
