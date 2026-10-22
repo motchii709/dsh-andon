@@ -13,7 +13,7 @@ DSH (DeepSeek Harness) の稼働状態を、常時点灯させておくアンド
 
 | デスクトップ | スマホ（390 CSS px） |
 |---|---|
-| ![アンドン盤（要対応の状態）](docs/andon-desktop.png) | ![スマホ表示](docs/andon-phone.png) |
+| ![アンドン盤（要対応の状態）](docs/img/andon-desktop.png) | ![スマホ表示](docs/img/andon-phone.png) |
 
 要対応の状態。左の8工程のうち**呼んでいるものだけ**が色面のセルになる。全部を塗ると本当の異常が埋もれるので、平常時の工程は数字だけにしてある。下の黒い帯が「何が呼んだか」と時計。
 

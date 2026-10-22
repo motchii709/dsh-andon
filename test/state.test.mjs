@@ -613,7 +613,7 @@ test('the README images are real PNGs, not text that was run through sed', async
 	// nothing complained until the README was opened in a browser.
 	const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 	for (const file of ['andon-desktop.png', 'andon-phone.png']) {
-		const bytes = readFileSync(new URL(`../docs/${file}`, import.meta.url));
+		const bytes = readFileSync(new URL(`../docs/img/${file}`, import.meta.url));
 		assert.ok(bytes.length > 1000, `${file} is suspiciously small (${bytes.length} bytes)`);
 		assert.deepEqual(
 			bytes.subarray(0, 8),
