@@ -606,6 +606,25 @@ test('every asset a page references has a route that serves it', async () => {
 	}
 });
 
+test('the README images are real PNGs, not text that was run through sed', async () => {
+	// These two are the only binary files in the repo, and a history rewrite ran
+	// sed across `git ls-files` — which stripped every 0x0D byte and left both
+	// files looking like PNGs by name only. They still decoded as text, so
+	// nothing complained until the README was opened in a browser.
+	const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+	for (const file of ['andon-desktop.png', 'andon-phone.png']) {
+		const bytes = readFileSync(new URL(`../docs/${file}`, import.meta.url));
+		assert.ok(bytes.length > 1000, `${file} is suspiciously small (${bytes.length} bytes)`);
+		assert.deepEqual(
+			bytes.subarray(0, 8),
+			signature,
+			`${file} does not start with the PNG signature — it was probably mangled by a text tool`,
+		);
+		// A PNG ends with an IEND chunk; a truncated or rewritten file will not.
+		assert.equal(bytes.subarray(-8).toString('latin1').includes('IEND'), true, `${file} has no IEND chunk`);
+	}
+});
+
 test('the andon client stays parseable on an old Silk (Fire tab)', async () => {
 	// The board is meant to sit on an Amazon Fire tab, whose Silk is a Chromium
 	// from before async/await (55), AbortController (66), optional chaining and
