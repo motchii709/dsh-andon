@@ -17,6 +17,7 @@
 			 * is never a bordered box inside another bordered box. */
 
 			#board {
+				height: 100vh;
 				height: 100dvh;
 				display: grid;
 				grid-template-rows: auto auto minmax(0, 1fr) auto;
@@ -437,7 +438,9 @@
 				position: fixed;
 				inset: 0 0 0 auto;
 				width: min(440px, 92vw);
+				height: 100vh;
 				height: 100dvh;
+				max-height: 100vh;
 				max-height: 100dvh;
 				margin: 0;
 				padding: 0;

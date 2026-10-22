@@ -605,3 +605,33 @@ test('every asset a page references has a route that serves it', async () => {
 		}
 	}
 });
+
+test('the andon client stays parseable on an old Silk (Fire tab)', async () => {
+	// The board is meant to sit on an Amazon Fire tab, whose Silk is a Chromium
+	// from before async/await (55), AbortController (66), optional chaining and
+	// `??` (80), padStart/Object.entries (54-57) and numeric separators (75).
+	// A syntax error does not degrade gracefully: the whole script fails to parse
+	// and the board stays on 読み込み中 forever with no clue why. kanban.js is
+	// exempt because that board is no longer maintained.
+	const banned = [
+		['optional chaining (?.)', /\?\.[a-zA-Z_$[(]/],
+		['nullish coalescing (??)', /\?\?/],
+		['async/await', /\b(?:async|await)\b/],
+		['padStart/padEnd', /pad(?:Start|End)/],
+		['Object.entries/values', /Object\.(?:entries|values)/],
+		['numeric separators', /\d_\d/],
+		['exponent operator (**)', /[^*/]\*\*[^*/]/],
+	];
+
+	for (const file of ['board.js', 'andon.js']) {
+		const source = readFileSync(new URL(`../public/${file}`, import.meta.url), 'utf8')
+			// Comments may name these features; only real code matters.
+			.split('\n')
+			.filter((line) => !/^\s*(?:\*|\/\/|\/\*)/.test(line))
+			.join('\n');
+
+		for (const [name, pattern] of banned) {
+			assert.ok(!pattern.test(source), `${file} uses ${name}, which old Silk cannot parse`);
+		}
+	}
+});

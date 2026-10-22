@@ -16,7 +16,10 @@
 export function h(tag, attrs, ...children) {
 	const node = document.createElement(tag);
 	if (attrs) {
-		for (const [key, value] of Object.entries(attrs)) {
+		const keys = Object.keys(attrs);
+		for (let i = 0; i < keys.length; i += 1) {
+			const key = keys[i];
+			const value = attrs[key];
 			if (value === null || value === undefined || value === false) continue;
 			if (key === 'class') node.className = value;
 			else if (key === 'text') node.textContent = value;
@@ -55,11 +58,16 @@ export function mount(node, ...children) {
 
 /* ── formatting ──────────────────────────────────────────────────────────── */
 
-const MIN = 60_000;
+const MIN = 60000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 
 /** Compact Japanese duration. `3分` / `2時間` / `4日`. */
+/** Zero-padded 2-digit field. padStart is ES2017 (Chrome 57); the Fire tab's Silk is older. */
+function pad2(n) {
+	return n < 10 ? "0" + n : String(n);
+}
+
 export function fmtDur(ms) {
 	if (!Number.isFinite(ms) || ms < 0) return '—';
 	if (ms < MIN) return 'たった今';
@@ -82,14 +90,12 @@ export function fmtDurLong(ms) {
 
 export function fmtClock(ts) {
 	const d = new Date(ts);
-	const p = (n) => String(n).padStart(2, '0');
-	return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+	return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
 
 export function fmtClockShort(ts) {
 	const d = new Date(ts);
-	const p = (n) => String(n).padStart(2, '0');
-	return `${p(d.getHours())}:${p(d.getMinutes())}`;
+	return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 /** Compact magnitude: 812 / 48.2k / 1.31M. Used for tokens and event counts. */
@@ -97,9 +103,9 @@ export function fmtNum(n) {
 	if (!Number.isFinite(n)) return '—';
 	const abs = Math.abs(n);
 	if (abs < 1000) return String(Math.round(n));
-	if (abs < 10_000) return n.toFixed(abs < 1000 ? 0 : 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-	if (abs < 1_000_000) return `${(n / 1000).toFixed(1)}k`;
-	return `${(n / 1_000_000).toFixed(2)}M`;
+	if (abs < 10000) return n.toFixed(abs < 1000 ? 0 : 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+	if (abs < 1000000) return `${(n / 1000).toFixed(1)}k`;
+	return `${(n / 1000000).toFixed(2)}M`;
 }
 
 export function clampText(value, max = 200) {
@@ -142,35 +148,58 @@ export function worstOf(severities) {
  */
 export function createPoller({ url, intervalMs = 2000, onData, onError }) {
 	let timer = null;
+	let controllerTimer = null;
 	let stopped = false;
 	let failures = 0;
 	let inFlight = null;
 	let last = null;
 
-	async function tick() {
-		if (stopped || inFlight) return;
-		const controller = new AbortController();
-		const abortTimer = setTimeout(() => controller.abort(), 8000);
-		inFlight = controller;
-		try {
-			const res = await fetch(url, {
-				signal: controller.signal,
-				cache: 'no-store',
-				headers: { accept: 'application/json' },
+	/* One fetch, as a promise chain rather than async/await.
+	 *
+	 * This file has to parse on the Fire tab's Silk, which is a Chromium from
+	 * before async/await (Chrome 55) and before AbortController (Chrome 66).
+	 * Optional chaining, `??`, `**`, `Object.entries`, `padStart` and numeric
+	 * separators are all out for the same reason: a parse error here means the
+	 * board sits on 読み込み中 forever with no clue why. A timeout is still
+	 * enforced without AbortController by racing the request against a timer. */
+	function tick() {
+		if (stopped || inFlight) return Promise.resolve();
+		const hasAbort = typeof AbortController === 'function';
+		const controller = hasAbort ? new AbortController() : null;
+		const init = { cache: 'no-store', headers: { accept: 'application/json' } };
+		if (controller) init.signal = controller.signal;
+		inFlight = controller || true;
+
+		let settled = false;
+		const guard = new Promise((_, reject) => {
+			controllerTimer = setTimeout(() => {
+				if (settled) return;
+				if (controller) controller.abort();
+				reject(new Error('timeout'));
+			}, 8000);
+		});
+
+		return Promise.race([fetch(url, init), guard])
+			.then((res) => {
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				return res.json();
+			})
+			.then((data) => {
+				settled = true;
+				failures = 0;
+				last = data;
+				if (onData) onData(data);
+			})
+			.catch((error) => {
+				settled = true;
+				if (stopped) return;
+				failures += 1;
+				if (onError) onError(error, failures, last);
+			})
+			.then(() => {
+				clearTimeout(controllerTimer);
+				inFlight = null;
 			});
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const data = await res.json();
-			failures = 0;
-			last = data;
-			onData?.(data);
-		} catch (error) {
-			if (stopped) return;
-			failures += 1;
-			onError?.(error, failures, last);
-		} finally {
-			clearTimeout(abortTimer);
-			inFlight = null;
-		}
 	}
 
 	function schedule() {
@@ -180,10 +209,9 @@ export function createPoller({ url, intervalMs = 2000, onData, onError }) {
 			return;
 		}
 		// 2s nominal, then 2s → 4s → 8s → 15s cap while the host is unreachable.
-		const delay = failures === 0 ? intervalMs : Math.min(intervalMs * 2 ** failures, 15_000);
-		timer = setTimeout(async () => {
-			await tick();
-			schedule();
+		const delay = failures === 0 ? intervalMs : Math.min(intervalMs * Math.pow(2, failures), 15000);
+		timer = setTimeout(() => {
+			tick().then(schedule);
 		}, delay);
 	}
 
@@ -200,7 +228,7 @@ export function createPoller({ url, intervalMs = 2000, onData, onError }) {
 		stop() {
 			stopped = true;
 			clearTimeout(timer);
-			inFlight?.abort();
+			if (inFlight) inFlight.abort();
 		},
 		refresh() {
 			clearTimeout(timer);
@@ -272,7 +300,7 @@ export function setTitle(status, base) {
 
 export function toggleFullscreen() {
 	if (document.fullscreenElement) document.exitFullscreen();
-	else document.documentElement.requestFullscreen?.();
+	else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
 }
 
 /* ── keyboard ────────────────────────────────────────────────────────────── */
@@ -284,16 +312,16 @@ export function bindKeys({ onRefresh, onOther, onHelp } = {}) {
 		if (event.metaKey || event.ctrlKey || event.altKey) return;
 		switch (event.key) {
 			case 'r':
-				onRefresh?.();
+				if (onRefresh) onRefresh();
 				break;
 			case 'f':
 				toggleFullscreen();
 				break;
 			case 'o':
-				onOther?.();
+				if (onOther) onOther();
 				break;
 			case '?':
-				onHelp?.();
+				if (onHelp) onHelp();
 				break;
 			default:
 				break;

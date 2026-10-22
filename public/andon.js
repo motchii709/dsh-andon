@@ -68,9 +68,9 @@ const STATUS_WORD = { alert: '要対応', warn: '注意', ok: '正常' };
  *  is something you can act on. This line and the lit rail rows always agree,
  *  because both come from the same counts. */
 function statusSubline(state) {
-	const counts = state.counts ?? {};
+	const counts = state.counts || {};
 	if (state.status === 'ok') {
-		return `異常なし · 実行中 ${counts.agentsRunning ?? 0} · セッション ${counts.liveSessions ?? 0}`;
+		return `異常なし · 実行中 ${counts.agentsRunning || 0} · セッション ${counts.liveSessions || 0}`;
 	}
 	const bits = [];
 	if (counts.pendingApprovals) bits.push(`承認待ち ${counts.pendingApprovals}件`);
@@ -99,10 +99,10 @@ function renderStations(stations) {
 		const sev =
 			station.severity === 'alert' || station.severity === 'warn' ? station.severity : 'ok';
 		if (row.el.dataset.sev !== sev) row.el.dataset.sev = sev;
-		setText(row.value, `${station.value}${station.suffix ?? ''}`);
+		setText(row.value, `${station.value}${station.suffix || ''}`);
 		// The breakdown stays a tooltip: the rail is a glance, and the field
 		// sub-line already states the categories in words.
-		row.el.title = `${station.label}: ${station.hint ?? ''}`;
+		row.el.title = `${station.label}: ${station.hint || ''}`;
 	}
 }
 
@@ -191,7 +191,7 @@ let lastGoodAt = null;
 function render(state) {
 	const now = Date.now();
 	const status = state.status === 'warn' || state.status === 'alert' ? state.status : 'ok';
-	const alerts = state.alerts ?? [];
+	const alerts = state.alerts || [];
 
 	// The colour field. This line is the alarm.
 	if (refs.board.dataset.status !== status) refs.board.dataset.status = status;
@@ -201,17 +201,17 @@ function render(state) {
 	setText(refs.alertCount, String(alerts.length));
 	refs.counter.dataset.sev = alerts.length ? 'alert' : 'ok';
 
-	renderStations(state.stations ?? []);
-	renderTicker(alerts, state.activity ?? []);
+	renderStations(state.stations || []);
+	renderTicker(alerts, state.activity || []);
 
-	const vitals = state.vitals ?? {};
-	const host = state.host ?? {};
+	const vitals = state.vitals || {};
+	const host = state.host || {};
 	const bits = [];
 	if (vitals.profile) bits.push(vitals.profile);
 	if (Number.isFinite(host.uptimeSec)) bits.push(`稼働 ${fmtDurLong(host.uptimeSec * 1000)}`);
 	setText(refs.host, bits.join(' · ') || '—');
 
-	const notes = state.notes ?? [];
+	const notes = state.notes || [];
 	if (notes.length) {
 		refs.notes.textContent = clampText(`取得できない項目: ${notes.join(' / ')}`, 120);
 		refs.notes.hidden = false;
