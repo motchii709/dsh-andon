@@ -1,0 +1,10 @@
+# Images are binary. Without this, core.autocrlf=true and any tool that walks
+# `git ls-files` treats them as text: a history rewrite's sed stripped every
+# 0x0D byte and left the README images unopenable while still "looking" fine in
+# a text editor. The test suite checks the PNG signature as well.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
