@@ -43,49 +43,96 @@ await settle(6);
  *  The scenario is chosen on the PAGE url (`/andon/?scenario=empty`) and
  *  remembered here, because the page itself polls the API without params. */
 let scenario = 'busy';
+
+/** Rewrite the v2 fields for a scenario.
+ *
+ *  `overall` and each session's `state` are judged on the server, so patching
+ *  only the v1 keys left every scenario looking like 異常 on the new board —
+ *  which made 正常 and 注意 impossible to screenshot deterministically. A
+ *  scenario has to describe the whole board, not half of it. */
+function withState(base, overall, reason, { needsYou = 0 } = {}) {
+	const sessions = (base.sessions ?? []).map((session) => ({
+		...session,
+		state: overall,
+		reason: overall === 'normal' ? '' : session.reason || reason,
+	}));
+	return {
+		...base,
+		overall,
+		reason,
+		sessions,
+		counts: { ...base.counts, needsYou },
+	};
+}
+
 function snapshotFor() {
 	const now = Date.now();
 	if (scenario === 'busy') return collector.snapshot();
 	const base = collector.snapshot();
 	if (scenario === 'empty') {
-		return {
-			...base,
-			status: 'ok',
-			counts: Object.fromEntries(Object.keys(base.counts).map((k) => [k, 0])),
-			stations: base.stations.map((s) => ({ ...s, value: 0, suffix: s.suffix, hint: '—', severity: 'ok' })),
-			alerts: [],
-			cards: [],
-			activity: [],
-			notes: [],
-		};
+		return withState(
+			{
+				...base,
+				status: 'ok',
+				counts: Object.fromEntries(Object.keys(base.counts).map((k) => [k, 0])),
+				stations: base.stations.map((s) => ({ ...s, value: 0, suffix: s.suffix, hint: '—', severity: 'ok' })),
+				alerts: [],
+				cards: [],
+				activity: [],
+				log: [],
+				history: [],
+				notes: [],
+			},
+			'normal',
+			'',
+		);
 	}
-	if (scenario === 'quiet') {
+	if (scenario === 'quiet' || scenario === 'watch') {
 		// The state the board actually sits in most of the day: nothing calling,
-		// but the harness is working. This is where the ticker falls back from
-		// the alert queue to the activity ring, so it is the only way to see
-		// what the ticker says when nobody is shouting. The 応答 row that filled
-		// every line on the live board only ever appeared in this mode, which
-		// none of busy/alarm/empty reproduced.
-		return {
+		// but the harness is working. `quiet` is 正常, `watch` is the same board
+		// with one session drifting (無反応 or context 80%+) so the 注意 styling
+		// can be seen without waiting for a real stall.
+		const overall = scenario === 'quiet' ? 'normal' : 'watch';
+		const patched = {
 			...base,
-			status: 'ok',
+			status: overall === 'normal' ? 'ok' : 'warn',
 			alerts: [],
 			cards: base.cards.filter((card) => card.column !== 'alert'),
 			stations: base.stations.map((s) => ({
 				...s,
-				severity: 'ok',
+				severity: overall === 'normal' ? 'ok' : s.severity === 'alert' ? 'warn' : s.severity,
 				value: s.id === 'needs-you' || s.id === 'jobs' || s.id === 'errors' ? 0 : s.value,
 			})),
 			// activity is kept on purpose — that is the whole point of the mode.
 		};
+		const out = withState(
+			patched,
+			overall,
+			overall === 'normal' ? '' : '実行中なのに 6分間 出力がありません',
+		);
+		if (overall === 'watch' && out.sessions.length > 0) {
+			out.sessions = out.sessions.map((s, i) => ({ ...s, state: i === 0 ? 'watch' : 'normal' }));
+			out.sessions[0].reason = '無反応 6分';
+		}
+		return out;
+	}
+	if (scenario === 'needs-you') {
+		return withState({ ...base, status: 'warn', alerts: base.alerts.slice(0, 1) }, 'needs-you', '承認待ち 1件', {
+			needsYou: Math.max(1, base.counts?.needsYou ?? 1),
+		});
 	}
 	if (scenario === 'alarm') {
-		return {
-			...base,
-			status: 'alert',
-			generatedAt: now,
-			stations: base.stations.map((s) => ({ ...s, severity: s.id === 'running' ? 'ok' : 'alert', value: s.value })),
-		};
+		return withState(
+			{
+				...base,
+				status: 'alert',
+				generatedAt: now,
+				stations: base.stations.map((s) => ({ ...s, severity: s.id === 'running' ? 'ok' : 'alert', value: s.value })),
+			},
+			'alarm',
+			'承認待ち 6分放置 1件',
+			{ needsYou: Math.max(1, base.counts?.needsYou ?? 1) },
+		);
 	}
 	return base;
 }
@@ -141,5 +188,5 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
 	console.log(`[dsh-andon preview] http://${HOST}:${PORT}/andon/`);
 	console.log(`[dsh-andon preview] http://${HOST}:${PORT}/kanban/`);
-	console.log('[dsh-andon preview] ?scenario=empty | quiet | busy | alarm');
+	console.log('[dsh-andon preview] ?scenario=empty | quiet | watch | needs-you | busy | alarm');
 });

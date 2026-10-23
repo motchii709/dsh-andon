@@ -429,7 +429,11 @@ async function call(handler, url) {
 test('the plugin registers its routes beside the harness', async () => {
 	const { mock, routes, effects } = await mountPlugin();
 
-	for (const path of [
+	// What matters is that the surface is *named*, not that it is a particular
+	// size: an exact count breaks whenever a route is added, while a route added
+	// without thinking is what this test should catch. So the list is an
+	// allowlist in both directions.
+	const mustExist = [
 		'/andon',
 		'/andon/',
 		'/kanban',
@@ -444,10 +448,19 @@ test('the plugin registers its routes beside the harness', async () => {
 		'/kanban/assets/kanban.js',
 		'/api/andon/state',
 		'/api/andon/health',
-	]) {
+	];
+	// v2 の ACK。契約書 docs/CONTRACT-v2.md §2 で決まっているが、まだ実装されていない。
+	// 「存在しなければ落ちる」にして開発中ずっと赤にすると他の検証が止まるので、
+	// いまは**登録されてよいパス**として許可だけしておく。実装が入ったら mustExist へ移す。
+	const allowedButNotRequired = ['/api/andon/ack'];
+	const allowed = new Set([...mustExist, ...allowedButNotRequired]);
+
+	for (const path of mustExist) {
 		assert.ok(routes.has(path), `route not registered: ${path}`);
 	}
-	assert.equal(routes.size, 14, 'exactly the intended surface — nothing wildcarded');
+	for (const path of routes.keys()) {
+		assert.ok(allowed.has(path), `unexpected route registered: ${path} — the surface must stay explicit`);
+	}
 
 	const bare = await call(routes.get('/andon'), '/andon');
 	assert.equal(bare.status, 302);

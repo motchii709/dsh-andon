@@ -6,475 +6,926 @@
 		<meta name="color-scheme" content="dark" />
 		<title>DSH アンドン</title>
 		<link rel="stylesheet" href="./assets/tokens.css" />
+		<link rel="stylesheet" href="./assets/md3ex.css" />
 		<style>
-			/* /andon — the wall board itself.
+			/* /andon — 盤そのもの（v2）。
 			 *
-			 * This is an andon, not a dashboard: the SCREEN is the light. One
-			 * saturated field fills the board and its colour IS the status
-			 * (green running / yellow attention / red stopped), carrying
-			 * enormous near-black type the way a real 表示板 carries 05R.
-			 * Nothing here is meant to be read at arm's length.
+			 * これはダッシュボードではなくアンドン。3m離れた所から「今どうなって
+			 * いて、誰が動くべきか」だけが分かればいい。だから地は暗く、色は状態の
+			 * ためだけに使い、数字は大きく、装飾は持たない。
 			 *
-			 * Three zones, matching a physical アンドン:
-			 *   rail   — the numbered station list; called stations light up
-			 *   field  — the colour and the two numbers (state + count)
-			 *   ticker — what called, and the clock
+			 * 状態と地の対応（契約 v2 §3）
+			 *   正常 / 注意   暗背景 #0F1115。緑は記号と状態名だけに乗せる。
+			 *   要対応        橙の全画面
+			 *   異常          赤の全画面＋点滅（1Hz未満。reduced-motion では太枠）
+			 *   通信断        灰の全画面。「通信断 / 最終受信 / 再接続中」以外を出さない
 			 *
-			 * The dark chrome is only the housing around the light.
-			 * Read DESIGN.md §3.1 for the data contract. */
+			 * 構成（上から 12 / 56 / 29 / 3 = 約12vh・58vh・22vh・3vh）
+			 *   ヘッダ  記号＋状態名 / 指標3つ / 最終受信＋現在時刻
+			 *   メイン  正常・注意=セッション一覧、要対応・異常=カード（最大3枚）
+			 *   ログ    21:10:32 [名前] 内容。新しい行ほど濃い
+			 *   履歴帯  直近の状態を色の帯で
+			 *
+			 * 守る決まり: 色は4色（緑・橙・赤・灰）だけ／角丸なし／罫線1px／
+			 * 余白は8pxの倍数／数字は tabular-nums（書体は和文と同じ1つ）／
+			 * letter-spacing は 0〜-0.02em／状態は必ず 色＋記号＋文字。
+			 *
+			 * 読み込み順: tokens.css → md3ex.css → この <style>。
+			 * 新規CSSファイルは作らない（新規ファイル＝新ルート＝ホスト再起動）。 */
+
+			:root {
+				--ground: #0f1115;
+				--ink: #e9edf0;
+				--ink-2: #bcc5cc;
+				--ink-3: #8b979f;
+				--line: rgba(233, 237, 240, 0.14);
+				--line-2: rgba(233, 237, 240, 0.32);
+
+				/* 状態色は tokens.css の意味色をそのまま。4色以外は足さない。 */
+				--stc: var(--ok);
+			}
 
 			html,
 			body {
 				height: 100%;
-				background: #08090a;
-				overflow: hidden;
+				margin: 0;
+				background: var(--ground);
+				color: var(--ink);
 			}
 
-			#board {
+			body {
+				overflow: hidden;
+				font-family: var(--font-ui);
+				-webkit-font-smoothing: antialiased;
+			}
+
+			/* 3秒操作が無ければカーソルを消す（常時表示の盤なので）。 */
+			body.cursor-hidden,
+			body.cursor-hidden * {
+				cursor: none;
+			}
+
+			#app {
 				height: 100vh;
 				height: 100dvh;
 				display: grid;
-				grid-template-columns: clamp(300px, 23vw, 452px) minmax(0, 1fr);
-				grid-template-rows: minmax(0, 1fr) auto;
-				gap: 10px;
-				padding: 10px;
-				background: #08090a;
+				grid-template-rows: minmax(0, 12fr) minmax(0, 58fr) minmax(0, 27fr) minmax(0, 3fr);
+				gap: 8px;
+				padding: 8px;
+				background: var(--ground);
+				/* 焼き付き対策。JS が10分ごとに数pxだけ動かす。 */
+				transform: translate(var(--sx, 0px), var(--sy, 0px));
 			}
 
-			/* The three states. Near-black type on all of them: on a saturated
-			 * ground black beats white for contrast in every case (green 8.6:1,
-			 * yellow 9.1:1, red 5.1:1), and it is what the real boards do. */
-			#board[data-status="ok"] {
-				--field: var(--ok);
-				--field-ink: #07130c;
+			/* ── 状態 → 地とインク ────────────────────────────────────── */
+
+			#app[data-overall="normal"],
+			#app[data-overall="watch"] {
+				background: var(--ground);
 			}
-			#board[data-status="warn"] {
-				--field: var(--warn);
-				--field-ink: #191002;
+			#app[data-overall="normal"] {
+				--stc: var(--ok);
 			}
-			#board[data-status="alert"] {
-				--field: var(--alert);
-				--field-ink: #1c0507;
-			}
-			body[data-down="1"] #board {
-				--field: #3a4249;
-				--field-ink: #0b0d0e;
+			#app[data-overall="watch"] {
+				--stc: var(--warn);
 			}
 
-			/* ── rail: the numbered station list ────────────────────────── */
-			/* Black rules on paper white, like the printed station column on a
-			 * real board. A station that is calling gets a solid saturated
-			 * cell — that is the whole point of the list. */
-			.rail {
-				display: flex;
-				flex-direction: column;
-				min-height: 0;
-				background: #e9edf0;
-				border: 2px solid #000;
-				overflow: hidden;
+			/* 要対応は橙、異常は赤。色面そのものが状態なので文字は黒にする
+			 * （黒 on #e8a13a = 9.6:1、黒 on #e5484d = 5.4:1）。副次色も 4.5:1 を
+			 * 割らない濃さに固定する — 色面の上では薄い灰が最初に消える。 */
+			#app[data-overall="needs-you"],
+			#app[data-overall="alarm"] {
+				--ink: #000000;
+				--ink-2: #0f0b07;
+				--ink-3: #1a130d;
+				--line: rgba(0, 0, 0, 0.3);
+				--line-2: rgba(0, 0, 0, 0.55);
+				--stc: #000000;
 			}
-
-			.sr {
-				flex: 1 1 0;
-				min-height: 0;
-				display: grid;
-				grid-template-columns: 2.1ch minmax(0, 1fr) auto;
-				align-items: center;
-				gap: clamp(8px, 0.9vw, 16px);
-				padding: 0 clamp(10px, 1.1vw, 20px);
-				border-top: 1px solid rgba(0, 0, 0, 0.42);
-				color: #0c0e10;
-			}
-
-			.sr:first-child {
-				border-top: 0;
-			}
-
-			.sr-i {
-				font-size: clamp(15px, 1.3vw, 28px);
-				color: rgba(0, 0, 0, 0.45);
-				text-align: right;
-			}
-
-			.sr-l {
-				font-size: clamp(16px, 1.5vw, 33px);
-				letter-spacing: 0.06em;
-				overflow: hidden;
-				text-overflow: ellipsis;
-				white-space: nowrap;
-			}
-
-			/* The lit cell. Only the NUMBER takes the colour, not the whole
-			 * row: painting five of eight rows solid made everything look
-			 * equally urgent, which is how a board hides its real alarm. The
-			 * labels stay on paper, so the list is still a readable list. */
-			.sr-v {
-				font-size: clamp(30px, 3vw, 62px);
-				line-height: 1;
-				font-weight: 600;
-				text-align: right;
-				min-width: 3.2ch;
-				padding: 4px 10px;
-				border-radius: 2px;
-			}
-
-			.sr[data-sev="warn"] .sr-v {
+			#app[data-overall="needs-you"] {
 				background: var(--warn);
-				color: #191002;
 			}
-
-			.sr[data-sev="alert"] .sr-v {
+			#app[data-overall="alarm"] {
 				background: var(--alert);
-				color: #1c0507;
 			}
 
-			.sr[data-sev="warn"] .sr-l,
-			.sr[data-sev="alert"] .sr-l {
-				font-weight: 700;
+			#app[data-overall="offline"] {
+				--ink: #dfe4e8;
+				--ink-2: #b9c1c7;
+				--ink-3: #9aa4ab;
+				--line: rgba(223, 228, 232, 0.18);
+				background: #2b3237;
 			}
 
-			/* A cleared station is grey; a calling one is solid colour. The
-			 * grey still has to be readable — a station list nobody can read
-			 * is decoration. */
-			.sr[data-sev="ok"] .sr-v,
-			.sr[data-sev="off"] .sr-v {
-				color: rgba(0, 0, 0, 0.5);
+			/* 異常の点滅。1.6秒周期＝0.63Hz（3回/秒を超えない）。
+			 * 地を暗くするのではなく明るい赤との間で脈打たせる: 地を暗くすると
+			 * 黒文字とのコントラストが 2:1 まで落ちて 3m で読めなくなる。
+			 * 黒 on #ff6f74 は 7.6:1 なので、どちらの相でも読める。 */
+			@media (prefers-reduced-motion: no-preference) {
+				#app[data-overall="alarm"][data-acked="0"] {
+					animation: alarm-blink 1.6s steps(1, end) infinite;
+				}
 			}
 
-			/* ── field: the light ───────────────────────────────────────── */
-			.field {
-				position: relative;
-				display: flex;
-				flex-direction: column;
-				justify-content: center;
-				gap: clamp(14px, 2.4vh, 36px);
-				padding: clamp(20px, 3.4vh, 52px) clamp(24px, 3vw, 60px);
-				background: var(--field);
-				color: var(--field-ink);
-				border: 2px solid #000;
-				overflow: hidden;
-				/* No transition on the colour. An andon snaps; a slow fade
-				 * would also mean a screenshot catches it mid-change. */
+			@keyframes alarm-blink {
+				0%,
+				49.9% {
+					background: var(--alert);
+				}
+				50%,
+				100% {
+					background: #ff6f74;
+				}
 			}
 
-			.field-tag {
-				position: absolute;
-				top: clamp(10px, 1.6vh, 20px);
-				left: clamp(24px, 3vw, 60px);
-				right: clamp(24px, 3vw, 60px);
-				display: flex;
-				justify-content: space-between;
-				gap: 24px;
-				font-size: clamp(13px, 1.1vw, 22px);
-				letter-spacing: 0.14em;
-				opacity: 0.88;
-				white-space: nowrap;
+			/* 動きを減らす設定では点滅せず、太枠で代える。 */
+			@media (prefers-reduced-motion: reduce) {
+				#app[data-overall="alarm"][data-acked="0"] {
+					box-shadow: inset 0 0 0 12px #000;
+				}
 			}
 
-			.field-top {
-				display: flex;
+			/* 通信断は画面全部を灰にする。他の帯は出さない。 */
+			#app[data-overall="offline"] {
+				grid-template-rows: minmax(0, 1fr);
+			}
+			#app[data-overall="offline"] .hdr,
+			#app[data-overall="offline"] .logsec,
+			#app[data-overall="offline"] .hist,
+			#app[data-overall="offline"] #view-list,
+			#app[data-overall="offline"] #view-cards,
+			#app[data-overall="offline"] #view-detail {
+				display: none;
+			}
+
+			/* 詳細は一覧とログの場所を使う。 */
+			#app[data-view="detail"] {
+				grid-template-rows: minmax(0, 12fr) minmax(0, 88fr);
+			}
+			#app[data-view="detail"] .logsec,
+			#app[data-view="detail"] .hist {
+				display: none;
+			}
+
+			/* ── ヘッダ帯 ─────────────────────────────────────────────── */
+			.hdr {
+				display: grid;
+				grid-template-columns: auto minmax(0, 1fr) auto;
 				align-items: center;
-				justify-content: space-between;
-				gap: clamp(20px, 2.4vw, 48px);
+				gap: 24px;
+				min-width: 0;
+				padding: 0 8px;
+				border-bottom: 1px solid var(--line-2);
+			}
+
+			.hdr-state {
+				display: flex;
+				align-items: baseline;
+				gap: 16px;
 				min-width: 0;
 			}
 
-			/* The word. 11.5vw at 1920 = 221px: the single token you read from
-			 * the doorway, and the reason this is not a dashboard. */
-			#status-word {
-				margin: 0;
-				font-size: clamp(76px, 11.5vw, 236px);
-				line-height: 0.92;
+			.hdr-sym {
+				font-size: clamp(20px, 4.4vh, 84px);
+				line-height: 1;
+				color: var(--stc);
+			}
+
+			.hdr-name {
+				font-size: clamp(26px, 6vh, 116px);
+				line-height: 1;
 				font-weight: 700;
-				letter-spacing: 0.06em;
+				letter-spacing: -0.01em;
+				color: var(--stc);
 				white-space: nowrap;
 			}
 
-			/* The count, at the same weight — a real board is mostly one
-			 * number, and this is the one. */
-			.counter {
+			.hdr-reason {
+				font-size: clamp(12px, 2vh, 34px);
+				color: var(--ink-2);
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			/* 指標は3つだけ。要対応 / 実行中 / コンテキスト最大。 */
+			.metrics {
+				display: flex;
+				justify-content: center;
+				gap: 0;
+				min-width: 0;
+			}
+
+			.metric {
 				display: flex;
 				align-items: baseline;
-				gap: clamp(4px, 0.6vw, 12px);
-				flex: none;
+				gap: 8px;
+				padding: 0 24px;
+				min-width: 0;
+				border-left: 1px solid var(--line);
 			}
 
-			#alert-count {
-				font-size: clamp(96px, 14vw, 300px);
-				line-height: 0.8;
-				font-weight: 600;
+			.metric:first-child {
+				border-left: 0;
+			}
+
+			.mk {
+				/* 中央の指標ラベルは 3m から読めること。小さくすると
+				 * 「コンテキスト」が別の語に見える（実際にレビューで誤読された）。 */
+				font-size: clamp(12px, 2.4vh, 36px);
+				color: var(--ink-2);
+				white-space: nowrap;
+			}
+
+			.mv {
+				font-size: clamp(20px, 4.4vh, 78px);
+				line-height: 1;
+				font-weight: 700;
 				letter-spacing: -0.02em;
+				font-variant-numeric: tabular-nums;
+				color: var(--ink);
 			}
 
-			.counter-u {
-				font-size: clamp(20px, 2vw, 44px);
-				letter-spacing: 0.08em;
+			/* 値が0のものは薄く。0以外は濃い。取得できない値は文字を小さくして
+			 * 「取得不可」を主役にしない（大きな数字の席を奪わない）。 */
+			.metric[data-zero="1"] .mv,
+			.det-v[data-zero="1"] {
+				opacity: 0.4;
+			}
+
+			.mv[data-na="1"] {
+				font-size: clamp(12px, 2.2vh, 40px);
+				font-weight: 400;
+				color: var(--ink-3);
+				letter-spacing: 0;
+			}
+
+			.ms {
+				font-size: clamp(11px, 1.7vh, 26px);
+				color: var(--ink-2);
+				max-width: 24ch;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.hdr-right {
+				display: flex;
+				align-items: baseline;
+				gap: 16px;
+				justify-content: flex-end;
+				min-width: 0;
+			}
+
+			/* 最終受信は正常時も必ず出す。静かな正常で盤が生きているかが分からなくなる。 */
+			.recv {
+				font-size: clamp(11px, 1.7vh, 26px);
+				color: var(--ink-2);
+				font-variant-numeric: tabular-nums;
+				white-space: nowrap;
+			}
+
+			.recv[data-stale="1"] {
+				color: var(--stc);
+			}
+
+			.now {
+				font-size: clamp(11px, 1.6vh, 24px);
+				color: var(--ink-3);
+				font-variant-numeric: tabular-nums;
+				white-space: nowrap;
+			}
+
+			.snd {
+				font: inherit;
+				font-size: clamp(10px, 1.4vh, 22px);
+				padding: 4px 8px;
+				color: var(--ink-2);
+				background: transparent;
+				border: 1px solid var(--line);
+				border-radius: 0;
+				font-variant-numeric: tabular-nums;
+				white-space: nowrap;
+			}
+
+			/* ── メイン（一覧・カード・通信断・詳細の入れ替え）───────── */
+			.main {
+				min-height: 0;
+				min-width: 0;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
+
+			/* ── セッション一覧 ───────────────────────────────────────── */
+			.list {
+				min-height: 0;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
+
+			.lhead,
+			.row {
+				display: grid;
+				grid-template-columns:
+					minmax(0, 1fr) minmax(7ch, auto) minmax(8ch, auto)
+					minmax(8ch, auto) minmax(11ch, 0.5fr);
+				align-items: center;
+				gap: 16px;
+				padding: 0 8px;
+				min-width: 0;
+			}
+
+			.lhead {
+				font-size: clamp(10px, 1.5vh, 22px);
+				color: var(--ink-3);
+				padding-bottom: 4px;
+				border-bottom: 1px solid var(--line);
+				letter-spacing: 0;
+			}
+
+			/* 行の器は残りの高さを取り、はみ出しは隠す。JS がこの高さを測って
+			 * 入るだけ出し、残りを「他N件」に畳む。 */
+			.rows {
+				flex: 1 1 auto;
+				min-height: 0;
+				overflow: hidden;
+				display: flex;
+				flex-direction: column;
+			}
+
+			/* 12行が必ず入る高さ（3.6vh × 12 + 他N件 が一覧の帯に収まる）。 */
+			.row {
+				min-height: 3.6vh;
+				border-bottom: 1px solid var(--line);
+			}
+
+			/* 1行1セッション。名前 / 状態 / 実行経過 / 最終出力 / コンテキスト。 */
+			.c-name {
+				font-size: clamp(13px, 2.4vh, 50px);
+				color: var(--ink);
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				letter-spacing: -0.01em;
+			}
+
+			.c-st {
+				font-size: clamp(12px, 2.2vh, 46px);
+				color: var(--stc);
+				white-space: nowrap;
+				letter-spacing: -0.01em;
+			}
+
+			.c-run,
+			.c-out {
+				font-size: clamp(12px, 2.2vh, 46px);
+				color: var(--ink-2);
+				font-variant-numeric: tabular-nums;
+				white-space: nowrap;
+			}
+
+			/* 取得できない値は 取得不可。0 や現在時刻で埋めない。 */
+			[data-na="1"] {
+				color: var(--ink-3);
 				opacity: 0.7;
 			}
 
-			.counter[data-sev="ok"] #alert-count {
-				opacity: 0.34;
-			}
-
-			#status-sub {
-				margin: 0;
-				/* The line that says WHY the board is lit. It carries the same
-				 * information weight as the state word for anyone who has
-				 * already seen the colour, so it has to survive 3m too —
-				 * thin 50px text was the first thing two independent
-				 * reviewers called unreadable. Heavier weight, bigger size. */
-				font-size: clamp(24px, 3vw, 60px);
-				font-weight: 600;
-				line-height: 1.15;
-				letter-spacing: 0.01em;
-				opacity: 0.94;
-				/* Wraps rather than truncates. An ellipsis here would hide
-				 * one of the three reasons the board is lit, which is the
-				 * one thing this line exists to prevent. */
-				overflow: hidden;
-			}
-
-			/* ── ticker: what called, and the clock ─────────────────────── */
-			.ticker {
-				grid-column: 1 / -1;
-				display: grid;
-				grid-template-columns: minmax(0, 1fr) auto;
-				align-items: center;
-				gap: clamp(16px, 2vw, 40px);
-				padding: clamp(8px, 1.2vh, 16px) clamp(14px, 1.6vw, 26px);
-				background: #0c0e10;
-				border: 2px solid #000;
-				color: var(--ink);
-				min-height: 0;
-			}
-
-			.tick-rows {
+			.c-ctx {
 				display: flex;
-				flex-direction: column;
-				gap: 2px;
+				align-items: center;
+				gap: 8px;
 				min-width: 0;
 			}
 
-			.trow {
-				display: grid;
-				grid-template-columns: 14px minmax(0, 1fr) auto;
-				align-items: center;
-				gap: clamp(10px, 1vw, 20px);
-				height: clamp(30px, 3.6vh, 44px);
-			}
-
-			.tdot {
-				width: 14px;
-				height: 14px;
-				border-radius: 50%;
-				background: var(--ink-4);
-			}
-
-			.trow[data-sev="ok"] .tdot {
-				background: var(--ok);
-			}
-			.trow[data-sev="warn"] .tdot {
-				background: var(--warn);
-			}
-			.trow[data-sev="alert"] .tdot {
-				background: var(--alert);
-			}
-
-			.ttime {
-				font-size: clamp(14px, 1.4vw, 27px);
-				color: var(--ink-4);
-			}
-
-			.ttext {
-				/* Second layer on purpose: at 3m you read the field, then walk
-				 * two steps in to read what called. Still sized so that a
-				 * pass at arm's length does not need squinting. */
-				font-size: clamp(18px, 2vw, 44px);
+			.c-ctxv {
+				font-size: clamp(12px, 2.2vh, 46px);
+				font-variant-numeric: tabular-nums;
 				color: var(--ink-2);
+				min-width: 5ch;
+				text-align: right;
+			}
+
+			/* 細いバー。角丸なし。 */
+			.ctxbar {
+				flex: 1 1 auto;
+				min-width: 4ch;
+				height: 4px;
+				background: var(--line);
 				overflow: hidden;
-				text-overflow: ellipsis;
-				white-space: nowrap;
 			}
 
-			.trow[data-sev="alert"] .ttext {
-				color: var(--ink);
+			.ctxbar > i {
+				display: block;
+				height: 100%;
+				background: var(--stc);
+				opacity: 0.9;
 			}
 
-			.trow[data-sev="alert"] .ttime {
-				color: var(--ink-2);
-			}
-
-			.tick-meta {
-				display: flex;
-				align-items: center;
-				gap: clamp(12px, 1.4vw, 28px);
-				flex: none;
-			}
-
-			/* The kanban board is no longer part of this product: there are
-			 * better kanban tools and the andon is the thing worth keeping. Its
-			 * page still answers on /kanban/ for anyone who bookmarked it, but
-			 * the andon does not point at it any more. */
-
-			.clock {
-				font-size: clamp(24px, 2.6vw, 52px);
-				line-height: 1;
-				color: var(--ink);
-				letter-spacing: 0.02em;
-			}
-
-			#host {
-				font-size: clamp(12px, 1vw, 18px);
-				/* Inherits the field's ink: the dark theme's grey belongs to
-				 * the dark chrome, and turns to mud on a saturated ground. */
-				color: inherit;
-				white-space: nowrap;
-				overflow: hidden;
-				text-overflow: ellipsis;
-				max-width: 26ch;
-			}
-
-			.conn {
-				font-size: clamp(12px, 1vw, 18px);
+			.ctxbar[data-zero="1"] > i,
+			.ctxbar[data-na="1"] > i {
+				opacity: 0.4;
 			}
 
 			.more {
 				margin: 0;
-				font-size: clamp(12px, 1vw, 18px);
-				color: var(--ink-3);
+				padding: 4px 8px;
+				font-size: clamp(11px, 1.7vh, 30px);
+				color: var(--ink-2);
+				font-variant-numeric: tabular-nums;
 			}
 
-			.notes {
-				grid-column: 1 / -1;
+			.empty {
 				margin: 0;
-				font-size: clamp(11px, 0.9vw, 15px);
-				color: var(--ink-4);
+				padding: 8px;
+				font-size: clamp(12px, 2vh, 34px);
+				color: var(--ink-2);
+			}
+
+			/* ── 要対応・異常のカード ─────────────────────────────────── */
+			.cards {
+				min-height: 0;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
+
+			.cards-grid {
+				flex: 1 1 auto;
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				/* 3枚は同じ高さで揃える。中身の高さで止めると、3m先から見て
+				 * 「小さな箱が上のほうに浮いている」だけの画面になる。 */
+				align-items: stretch;
+				gap: 8px;
+				min-height: 0;
+				overflow: hidden;
+			}
+
+			.card {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+				padding: 16px;
+				min-width: 0;
+				min-height: 26vh;
+				overflow: hidden;
+				border: 1px solid var(--line-2);
+				background: transparent;
+			}
+
+			.card-name {
+				margin: 0;
+				font-size: clamp(14px, 2.8vh, 56px);
+				line-height: 1.15;
+				font-weight: 700;
+				color: var(--ink);
+				letter-spacing: -0.01em;
+				overflow: hidden;
+				display: -webkit-box;
+				-webkit-line-clamp: 2;
+				-webkit-box-orient: vertical;
+			}
+
+			.card-reason {
+				margin: 0;
+				font-size: clamp(13px, 2.6vh, 50px);
+				line-height: 1.15;
+				color: var(--ink);
+				font-weight: 700;
+			}
+
+			.card-when {
+				margin: 0;
+				font-size: clamp(12px, 2.2vh, 44px);
+				color: var(--ink-2);
+				font-variant-numeric: tabular-nums;
+			}
+
+			.card-out {
+				margin: 0;
+				font-size: clamp(11px, 1.8vh, 34px);
+				color: var(--ink-2);
+				border-top: 1px solid var(--line);
+				padding-top: 8px;
 				overflow: hidden;
 				text-overflow: ellipsis;
 				white-space: nowrap;
 			}
 
-			.err {
-				display: none;
+			.ack {
+				margin: auto 0 0;
+				font: inherit;
+				font-size: clamp(13px, 2.4vh, 44px);
+				font-weight: 700;
+				padding: 8px 16px;
+				min-height: 44px;
+				color: var(--ink);
+				background: transparent;
+				border: 1px solid var(--line-2);
+				border-radius: 0;
+				letter-spacing: 0;
 			}
 
-			/* ── narrow tablets: turn the rail into a bottom strip ─────── */
-			@media (max-width: 1100px), (max-height: 620px) {
-				#board {
+			.ack:hover,
+			.ack:focus-visible {
+				background: rgba(20, 16, 10, 0.1);
+			}
+
+			/* ── 通信断 ───────────────────────────────────────────────── */
+			.offline {
+				flex: 1 1 auto;
+				min-height: 0;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				gap: 8px;
+				padding: 32px;
+			}
+
+			.off-sym {
+				font-size: clamp(28px, 6vh, 110px);
+				line-height: 1;
+				color: var(--ink-2);
+			}
+
+			.off-word {
+				margin: 0;
+				font-size: clamp(48px, 18vh, 320px);
+				line-height: 1;
+				font-weight: 700;
+				color: var(--ink);
+				letter-spacing: -0.02em;
+			}
+
+			.off-line {
+				margin: 0;
+				font-size: clamp(14px, 3vh, 56px);
+				color: var(--ink-2);
+				font-variant-numeric: tabular-nums;
+			}
+
+			/* ── 詳細 ─────────────────────────────────────────────────── */
+			.detail {
+				min-height: 0;
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+				overflow: hidden;
+			}
+
+			.det-h {
+				margin: 0;
+				font-size: clamp(12px, 1.8vh, 28px);
+				font-weight: 400;
+				color: var(--ink-3);
+				letter-spacing: 0;
+			}
+
+			.det-t {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: clamp(12px, 2vh, 34px);
+				color: var(--ink);
+			}
+
+			.det-t th,
+			.det-t td {
+				text-align: left;
+				padding: 8px 8px 8px 0;
+				border-bottom: 1px solid var(--line);
+				vertical-align: baseline;
+			}
+
+			.det-t th {
+				font-weight: 400;
+				color: var(--ink-2);
+				width: 18ch;
+				white-space: nowrap;
+			}
+
+			.det-v {
+				font-variant-numeric: tabular-nums;
+			}
+
+			.det-hint {
+				margin: 0;
+				font-size: clamp(10px, 1.5vh, 24px);
+				color: var(--ink-3);
+			}
+
+			/* ── ログ ─────────────────────────────────────────────────── */
+			.logsec {
+				min-height: 0;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
+
+			.log {
+				list-style: none;
+				margin: 0;
+				padding: 0;
+				flex: 1 1 auto;
+				min-height: 0;
+				overflow: hidden;
+			}
+
+			.lrow {
+				display: grid;
+				grid-template-columns: 9ch minmax(0, 15ch) minmax(0, 1fr);
+				align-items: baseline;
+				gap: 8px;
+				padding: 0 8px;
+				min-height: 2vh;
+				font-size: clamp(12px, 1.9vh, 34px);
+				line-height: 1.25;
+			}
+
+			.lt {
+				color: var(--ink-3);
+				font-variant-numeric: tabular-nums;
+				white-space: nowrap;
+			}
+
+			.ln {
+				color: var(--ink-3);
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.ltx {
+				color: var(--ink-2);
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			/* 重要度: alert は太字＋状態色＋1.3倍、warn は中間、ok は小さく。 */
+			.lrow[data-sev="alert"] {
+				font-size: clamp(15px, 2.5vh, 44px);
+				font-weight: 700;
+			}
+			.lrow[data-sev="alert"] .ltx {
+				color: var(--alert);
+			}
+			.lrow[data-sev="warn"] .ltx {
+				color: var(--warn);
+			}
+			.lrow[data-sev="ok"] .ltx {
+				color: var(--ink-3);
+			}
+
+			/* 色面の上では「状態色」は地そのもの。太字と大きさで強弱を付ける。 */
+			#app[data-overall="needs-you"] .lrow[data-sev="alert"] .ltx,
+			#app[data-overall="alarm"] .lrow[data-sev="alert"] .ltx {
+				color: var(--ink);
+			}
+			#app[data-overall="needs-you"] .lrow[data-sev="warn"] .ltx,
+			#app[data-overall="alarm"] .lrow[data-sev="warn"] .ltx {
+				color: var(--ink-2);
+			}
+			#app[data-overall="needs-you"] .lrow[data-sev="ok"] .ltx,
+			#app[data-overall="alarm"] .lrow[data-sev="ok"] .ltx {
+				color: var(--ink-3);
+			}
+
+			/* ── 履歴帯 ───────────────────────────────────────────────── */
+			/* 24時間を1分粒度（1440区画）で、その時刻の状態色で塗る。canvas に
+			 * 描くのは、1440個の要素を2秒ごとに作り直さないため。
+			 * 色は JS が決める（正常は緑ではなく無彩色。緑を敷くと盤が緑っぽく
+			 * なり「正常は静か」に反する）。 */
+			.hist {
+				display: block;
+				width: 100%;
+				height: 100%;
+				min-height: 0;
+				border-top: 1px solid var(--line);
+			}
+
+			/* ── clamp() が無いエンジン（Fire OS 5 / Silk）向け ────────── */
+			@supports not (font-size: clamp(1rem, 1vw, 2rem)) {
+				.hdr-sym {
+					font-size: 4.4vh;
+				}
+				.hdr-name {
+					font-size: 6vh;
+				}
+				.hdr-reason,
+				.recv,
+				.mk,
+				.ms {
+					font-size: 1.9vh;
+				}
+				.mv {
+					font-size: 4.4vh;
+				}
+				.c-name {
+					font-size: 2.4vh;
+				}
+				.c-st,
+				.c-run,
+				.c-out,
+				.c-ctxv {
+					font-size: 2.2vh;
+				}
+				.lrow {
+					font-size: 1.9vh;
+				}
+				.lrow[data-sev="alert"] {
+					font-size: 2.5vh;
+				}
+				.card-name {
+					font-size: 2.8vh;
+				}
+				.card-reason {
+					font-size: 2.6vh;
+				}
+				.off-word {
+					font-size: 18vh;
+				}
+			}
+
+			/* ── 夜間（既定 22:00〜6:00、?night=0/1 で上書き）─────────────
+			 * 輝度は落とすが、コントラストは落とさない。
+			 * filter: brightness() で全体を暗くすると、暗い色面の上の黒文字が
+			 * 2.4:1 まで落ちて 3m では読めなくなる。だから色面は「暗い地＋
+			 * 明るい文字」へ反転させる（夜だけの配色で、構造は変えない）。 */
+			#app[data-night="1"][data-overall="normal"],
+			#app[data-night="1"][data-overall="watch"] {
+				--ink: #ccd3d9;
+				--ink-2: #a4adb4;
+				--ink-3: #7d878e;
+				--line: rgba(204, 211, 217, 0.11);
+				--line-2: rgba(204, 211, 217, 0.26);
+			}
+			#app[data-night="1"][data-overall="normal"] {
+				--stc: #35a862;
+			}
+			#app[data-night="1"][data-overall="watch"] {
+				--stc: #c98c33;
+			}
+
+			#app[data-night="1"][data-overall="needs-you"] {
+				background: #2a1d08;
+				--ink: #f0d9b5;
+				--ink-2: #d3ba95;
+				--ink-3: #a6926f;
+				--line: rgba(240, 217, 181, 0.2);
+				--line-2: rgba(240, 217, 181, 0.45);
+				--stc: #e8a13a;
+			}
+
+			#app[data-night="1"][data-overall="alarm"] {
+				background: #2c0d0f;
+				--ink: #ffdcdd;
+				--ink-2: #e0b6b7;
+				--ink-3: #b18f90;
+				--line: rgba(255, 220, 221, 0.2);
+				--line-2: rgba(255, 220, 221, 0.45);
+				--stc: #ff8b8f;
+			}
+
+			#app[data-night="1"][data-overall="offline"] {
+				background: #1d2226;
+				--ink: #c3cbd1;
+				--ink-2: #a0a9af;
+				--ink-3: #7d858b;
+				--line: rgba(195, 203, 209, 0.16);
+			}
+
+			@media (prefers-reduced-motion: no-preference) {
+				#app[data-night="1"][data-overall="alarm"][data-acked="0"] {
+					animation: alarm-blink-night 1.6s steps(1, end) infinite;
+				}
+			}
+
+			@keyframes alarm-blink-night {
+				0%,
+				49.9% {
+					background: #2c0d0f;
+				}
+				50%,
+				100% {
+					background: #451619;
+				}
+			}
+
+			/* 縦長は本来非対応。撮影と万一の確認用に最低限だけ畳む。 */
+			@media (max-width: 899px) {
+				#app {
+					grid-template-rows: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
+					gap: 4px;
+					padding: 4px;
+				}
+				.hdr {
 					grid-template-columns: minmax(0, 1fr);
-					grid-template-rows: minmax(0, 1fr) auto auto;
+					gap: 4px;
+					padding: 4px;
 				}
-				.rail {
-					flex-direction: row;
-					grid-row: 2;
-					border-top: 2px solid #000;
+				.metrics {
+					justify-content: flex-start;
 				}
-				.sr {
+				.metric {
+					padding: 0 8px;
+				}
+				.cards-grid {
 					grid-template-columns: minmax(0, 1fr);
-					grid-template-rows: auto auto;
-					justify-items: center;
-					gap: 0;
-					border-top: 0;
-					border-left: 1px solid rgba(0, 0, 0, 0.42);
-					padding: 4px 2px;
 				}
-				.sr:first-child {
-					border-left: 0;
+				.lhead,
+				.row {
+					grid-template-columns: minmax(0, 1fr) auto;
+					gap: 8px;
 				}
-				.sr-i {
+				.c-run,
+				.c-ctx,
+				.lhead .c-run,
+				.lhead .c-ctx,
+				.lhead .c-out {
 					display: none;
-				}
-				.sr-l {
-					font-size: clamp(10px, 1.6vw, 15px);
-				}
-				.sr-v {
-					font-size: clamp(16px, 2.6vw, 26px);
-				}
-				.ticker {
-					grid-row: 3;
-				}
-				#status-word {
-					font-size: clamp(48px, 11vw, 110px);
-				}
-				#alert-count {
-					font-size: clamp(52px, 12vw, 130px);
 				}
 			}
 		</style>
-		<!-- Material 3 Expressive layer, loaded LAST on purpose: it overrides
-		     the page rules above (shape scale, tonal surfaces, the phone
-		     breakpoint). Loaded before <style>, its phone rules lost to the
-		     page's own @media (max-width:1100px) block and the board overflowed
-		     a 390px viewport. -->
-		<link rel="stylesheet" href="./assets/md3ex.css" />
 	</head>
 	<body>
-		<!-- The static shell is complete before a single byte of JSON arrives:
-		     every station label, every placeholder and the whole rail are in
-		     the markup, so a failed script leaves a legible (if empty) board
-		     rather than a blank page. JS only fills values in. -->
-		<main id="board" data-status="ok">
-			<aside class="rail" aria-label="工程">
-				<div class="sr" id="st-needs-you" data-sev="off">
-					<span class="sr-i num">1</span><span class="sr-l">要対応</span
-					><span class="sr-v num live-value">—</span>
+		<!-- 静的な骨組みは JSON が1バイトも来る前に完成している。JS は値を差し込むだけ。 -->
+		<div id="app" data-overall="normal" data-view="main" data-acked="0">
+			<header class="hdr">
+				<div class="hdr-state">
+					<span class="hdr-sym" id="hdr-sym">○</span>
+					<span class="hdr-name" id="hdr-name">正常</span>
+					<span class="hdr-reason" id="hdr-reason" hidden></span>
 				</div>
-				<div class="sr" id="st-running" data-sev="off">
-					<span class="sr-i num">2</span><span class="sr-l">実行中</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-				<div class="sr" id="st-sessions" data-sev="off">
-					<span class="sr-i num">3</span><span class="sr-l">セッション</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-				<div class="sr" id="st-jobs" data-sev="off">
-					<span class="sr-i num">4</span><span class="sr-l">ジョブ</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-				<div class="sr" id="st-subagents" data-sev="off">
-					<span class="sr-i num">5</span><span class="sr-l">サブ</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-				<div class="sr" id="st-goals" data-sev="off">
-					<span class="sr-i num">6</span><span class="sr-l">目標</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-				<div class="sr" id="st-context" data-sev="off">
-					<span class="sr-i num">7</span><span class="sr-l">文脈</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-				<div class="sr" id="st-errors" data-sev="off">
-					<span class="sr-i num">8</span><span class="sr-l">異常計</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-			</aside>
 
-			<section class="field" aria-label="状態">
-				<div class="field-tag">
-					<span>DSH 状態</span>
-					<span id="host">—</span>
-				</div>
-				<div class="field-top">
-					<h1 id="status-word">—</h1>
-					<div class="counter" id="counter" data-sev="ok">
-						<span class="num" id="alert-count">—</span>
-						<span class="counter-u">件</span>
+				<div class="metrics">
+					<div class="metric" id="m-needsyou" data-zero="1">
+						<span class="mk">要対応</span>
+						<span class="mv" id="mv-needsyou">—</span>
+					</div>
+					<div class="metric" id="m-running" data-zero="1">
+						<span class="mk">実行中</span>
+						<span class="mv" id="mv-running">—</span>
+					</div>
+					<div class="metric" id="m-ctx">
+						<span class="mk">コンテキスト最大</span>
+						<span class="mv" id="mv-ctx">—</span>
+						<span class="ms" id="ms-ctx"></span>
 					</div>
 				</div>
-				<p id="status-sub">読み込み中</p>
+
+				<div class="hdr-right">
+					<span class="recv" id="recv">最終受信 —</span>
+					<span class="now" id="now">--:--:--</span>
+					<button class="snd" id="btn-sound" type="button">音: 無効</button>
+				</div>
+			</header>
+
+			<main class="main" id="main">
+				<!-- 正常・注意: セッション一覧 -->
+				<section class="list" id="view-list">
+					<div class="lhead">
+						<span class="c-name">セッション</span>
+						<span class="c-st">状態</span>
+						<span class="c-run">実行経過</span>
+						<span class="c-out">最終出力から</span>
+						<span class="c-ctx">コンテキスト</span>
+					</div>
+					<div class="rows" id="rows"></div>
+					<p class="more" id="list-more" hidden></p>
+				</section>
+
+				<!-- 要対応・異常: カード（最大3枚） -->
+				<section class="cards" id="view-cards" hidden>
+					<div class="cards-grid" id="cards"></div>
+					<p class="more" id="cards-more" hidden></p>
+				</section>
+
+				<!-- 通信断 -->
+				<section class="offline" id="view-offline" hidden>
+					<span class="off-sym" aria-hidden="true">？</span>
+					<h1 class="off-word">通信断</h1>
+					<p class="off-line" id="off-last">最終受信 —</p>
+					<p class="off-line" id="off-retry">再接続中</p>
+				</section>
+
+				<!-- 詳細 -->
+				<section class="detail" id="view-detail" hidden>
+					<h2 class="det-h">詳細</h2>
+					<table class="det-t">
+						<tbody id="det-body"></tbody>
+					</table>
+					<p class="det-hint">D またはクリックで戻る</p>
+				</section>
+			</main>
+
+			<section class="logsec" aria-label="ログ">
+				<ol class="log" id="log"></ol>
 			</section>
 
-			<footer class="ticker">
-				<div class="tick-rows" id="alert-list"></div>
-				<div class="tick-meta">
-					<div class="conn" id="conn" data-state="ok">
-						<i class="conn-dot"></i><span data-role="conn-label">LIVE</span>
-					</div>
-					<div class="clock num" id="clock">--:--:--</div>
-				</div>
-				<p class="notes" id="notes" hidden></p>
-			</footer>
-		</main>
+			<canvas class="hist" id="hist" aria-hidden="true"></canvas>
+		</div>
 
 		<script type="module" src="./assets/andon.js"></script>
 	</body>
