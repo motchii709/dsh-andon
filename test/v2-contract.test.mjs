@@ -141,6 +141,23 @@ test('log lines are human words, capped at 40 characters, newest first', async (
 	}
 });
 
+test('no card ever shows the home directory', async () => {
+	const snap = await snapshotWith();
+
+	// A tool argument like C:\Users\<name>\Documents\...\README.md is 60
+	// characters of home directory. On a shared wall it also names the account.
+	// The collector shortens path-like tool hints to their last two segments.
+	for (const session of snap.sessions) {
+		if (!session.lastOutput) continue;
+		assert.ok(
+			!/[A-Za-z]:[\\/]|Users[\\/]/u.test(session.lastOutput),
+			`lastOutput leaks an absolute path: ${session.lastOutput}`,
+		);
+	}
+	for (const line of snap.log) {
+		assert.ok(!/Users[\\/]/u.test(line.text), `log leaks a home path: ${line.text}`);
+	}
+});
 test('the v1 keys still work while the board is being replaced', async () => {
 	const snap = await snapshotWith();
 
