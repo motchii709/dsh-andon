@@ -38,10 +38,20 @@ export function createMockCtx(overrides = {}) {
 		events: [
 			event('user/message', 1, 41, { text: 'アンドンとカンバンを作って' }),
 			event('assistant/message', 2, 40, {}),
-			event('approval/asked', 3, 6, { id: 'ap_1', toolName: 'bash', callId: 'c_9', reason: 'pnpm install を実行します' }),
+			// A tool call carrying an absolute path. The board must not put
+			// `C:\Users\<name>\…` on a wall: the hint is shortened to the last two
+			// segments, and v2-contract asserts that. Without this event that
+			// assertion had nothing to look at.
+			event('tool/call', 3, 39.5, {
+				name: 'edit',
+				arguments: JSON.stringify({
+					path: 'C:\\Users\\<you>\\Documents\\DSH\\playgrounds\\dsh-andon\\README.md',
+				}),
+			}),
+			event('approval/asked', 6, 6, { id: 'ap_1', toolName: 'bash', callId: 'c_9', reason: 'pnpm install を実行します' }),
 			// asked then decided, in that order, so the backwards fold has to notice
-			event('approval/asked', 4, 39, { id: 'ap_old', toolName: 'write', callId: 'c_1' }),
-			event('approval/decided', 5, 38, { id: 'ap_old', outcome: 'allowed-once' }),
+			event('approval/asked', 7, 39, { id: 'ap_old', toolName: 'write', callId: 'c_1' }),
+			event('approval/decided', 8, 38, { id: 'ap_old', outcome: 'allowed-once' }),
 		],
 	});
 

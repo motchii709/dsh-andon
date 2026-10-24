@@ -147,6 +147,22 @@ test('no card ever shows the home directory', async () => {
 	// A tool argument like C:\Users\<name>\Documents\...\README.md is 60
 	// characters of home directory. On a shared wall it also names the account.
 	// The collector shortens path-like tool hints to their last two segments.
+	// The fixture has an `edit` tool call whose argument is an absolute path, so
+	// this cannot pass by there being nothing to look at.
+	const withPath = snap.sessions.filter((session) => session.lastOutput?.startsWith('edit:'));
+	assert.ok(withPath.length > 0, 'the fixture must produce an edit hint for this test to mean anything');
+
+	for (const session of withPath) {
+		assert.ok(
+			!/[A-Za-z]:[\\/]|Users[\\/]/u.test(session.lastOutput),
+			`lastOutput leaks an absolute path: ${session.lastOutput}`,
+		);
+		assert.match(
+			session.lastOutput,
+			/README\.md/u,
+			'the shortened hint still names the file — dropping the whole value would be worse',
+		);
+	}
 	for (const session of snap.sessions) {
 		if (!session.lastOutput) continue;
 		assert.ok(
@@ -157,6 +173,39 @@ test('no card ever shows the home directory', async () => {
 	for (const line of snap.log) {
 		assert.ok(!/Users[\\/]/u.test(line.text), `log leaks a home path: ${line.text}`);
 	}
+});
+test('a needs-you left alone long enough becomes an alarm (§11-4)', async () => {
+	const snap = await snapshotWith();
+	const pending = snap.sessions.find((s) => s.reason.includes('放置'));
+	assert.ok(pending, 'the fixture has an approval older than the 5 minute line');
+	assert.equal(
+		pending.state,
+		'alarm',
+		'a pending approval that nobody answered for 5 minutes is 異常, not 要対応',
+	);
+});
+
+test('a running session that goes quiet becomes 注意 (§11-5)', async () => {
+	// Force one session to look running while its last output is old, and keep
+	// context low so the silence rule is the only thing that can fire.
+	const mock = createMockCtx({
+		sessionProjections: {
+			stateOf: () => ({ projectedTokens: 1000, contextWindow: 262144 }),
+		},
+	});
+	const sessions = mock.ctx.sessions.list();
+	const target = sessions.find((s) => s.header.id === 'ses_repo000003');
+	const ctx = { ...mock.ctx, agents: { list: () => [{ session: target, status: 'running' }], roots: () => [] } };
+	const collector = createCollector(ctx);
+	await settle(6);
+	const snap = collector.snapshot();
+	collector.dispose();
+
+	const only = snap.sessions.find((s) => s.id === 'ses_repo000003');
+	assert.ok(only, 'the forced session is in the payload');
+	assert.equal(only.status, 'running');
+	assert.equal(only.state, 'watch', 'running but silent for 5 minutes is 注意');
+	assert.match(only.reason, /無反応|出力/u);
 });
 test('the v1 keys still work while the board is being replaced', async () => {
 	const snap = await snapshotWith();
