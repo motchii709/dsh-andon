@@ -71,6 +71,7 @@ const refs = {
 	offRetry: $('off-retry'),
 	detail: $('view-detail'),
 	detBody: $('det-body'),
+	note: $('board-note'),
 	log: $('log'),
 	hist: $('hist'),
 };
@@ -84,6 +85,25 @@ function pad2(n) {
 function setText(node, text) {
 	const next = String(text);
 	if (node.textContent !== next) node.textContent = next;
+}
+
+/* 書き込みは全部この3つを通す。中身が同じなら DOM に触らない —
+ * 2秒ごとに全体が来るので「同じ値を書き直さない」ことがそのまま軽さになる。 */
+
+/** 表示用の属性（state や na など）。dataset は文字列で比べられる。 */
+function setData(node, name, value) {
+	const next = String(value);
+	if (node.dataset[name] !== next) node.dataset[name] = next;
+}
+
+function setHidden(node, hidden) {
+	const next = !!hidden;
+	if (node.hidden !== next) node.hidden = next;
+}
+
+/** インラインstyle。width など、比べられる形でしか使わない。 */
+function setStyle(node, prop, value) {
+	if (node.style[prop] !== value) node.style[prop] = value;
 }
 
 function stateOf(value) {
@@ -176,7 +196,10 @@ function normalize(raw) {
 			counts: raw.counts && typeof raw.counts === 'object' ? raw.counts : {},
 			sessions: raw.sessions,
 			log: Array.isArray(raw.log) ? raw.log : [],
-			history: Array.isArray(raw.history) ? raw.history : [],
+			// history は v2.1 で [fromMs, stepMs, codes] のランレングス。展開は renderHistory。
+			history: raw.history,
+			// 収集の不調の説明（通常は空）。空でも「緑のまま黙る」ことはしない。
+			notes: Array.isArray(raw.notes) ? raw.notes : [],
 			seq: num(raw.seq),
 			build: typeof raw.build === 'string' ? raw.build : '',
 		};
@@ -248,6 +271,7 @@ function normalizeLegacy(raw) {
 		sessions,
 		log,
 		history: [],
+		notes: [],
 		seq: null,
 		build: '',
 	};
@@ -285,20 +309,42 @@ function sorted(sessions) {
 /**
  * 入るだけ出して、残りは「他N件」に畳む。行の高さは状態で変わるので
  * 実際の高さで測る（1行だけ隠して測り直す、を繰り返す）。
+ *
+ * 測るたびに強制レイアウトが起きるので、呼ぶのは「行が増減したとき」と
+ * 「画面の大きさが変わったとき」だけにする（毎回呼ぶと、変化が無い2秒でも
+ * レイアウトをやり直すことになる）。onShow は隠れていた行を出し直すときに
+ * 一度だけ呼ぶ（隠れている間は経過表示が止まっているため）。
  */
-function trimToFit(container, rows, moreNode) {
-	for (let i = 0; i < rows.length; i += 1) rows[i].hidden = false;
-	if (moreNode) moreNode.hidden = true;
+function trimToFit(container, rows, moreNode, onShow) {
+	for (let i = 0; i < rows.length; i += 1) {
+		if (!rows[i].hidden) continue;
+		rows[i].hidden = false;
+		setHidden(rows[i].node, false);
+		if (onShow) onShow(rows[i]);
+	}
+	if (moreNode) setHidden(moreNode, true);
 	if (!rows.length) return 0;
 	const overflow = () => container.scrollHeight > container.clientHeight + 1;
 	let shown = rows.length;
 	if (!overflow()) return shown;
-	if (moreNode) moreNode.hidden = false;
+	if (moreNode) setHidden(moreNode, false);
 	while (shown > 1 && overflow()) {
 		shown -= 1;
 		rows[shown].hidden = true;
+		setHidden(rows[shown].node, true);
 	}
 	return shown;
+}
+
+function removeNode(node) {
+	if (node.parentNode) node.parentNode.removeChild(node);
+}
+
+/** id の並びが同じか（同じなら DOM を並べ直さない）。 */
+function sameKeys(a, b) {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+	return true;
 }
 
 /* ── ヘッダ ─────────────────────────────────────────────────────────────── */
@@ -309,7 +355,7 @@ function renderHeader() {
 	setText(refs.name, meta.name);
 
 	const reason = model.reason && model.overall !== 'normal' ? model.reason : '';
-	refs.reason.hidden = !reason;
+	setHidden(refs.reason, !reason);
 	if (reason) setText(refs.reason, reason);
 
 	// 指標は3つだけ。要対応 / 実行中 / コンテキスト最大（セッション名付き）。
@@ -317,8 +363,8 @@ function renderHeader() {
 	const running = num(model.counts.running);
 	setText(refs.vNeedsYou, needsYou === null ? '—' : String(needsYou));
 	setText(refs.vRunning, running === null ? '—' : String(running));
-	refs.mNeedsYou.dataset.zero = needsYou === 0 ? '1' : '0';
-	refs.mRunning.dataset.zero = running === 0 ? '1' : '0';
+	setData(refs.mNeedsYou, 'zero', needsYou === 0 ? '1' : '0');
+	setData(refs.mRunning, 'zero', running === 0 ? '1' : '0');
 
 	// コンテキスト最大は契約の counts.contextMax。無ければ最も重いセッションから。
 	let ctxMax = num(model.counts.contextMax);
@@ -327,9 +373,9 @@ function renderHeader() {
 	if (ctxMax === null && worst) ctxMax = num(worst.contextPct);
 	if (worst && num(worst.contextPct) !== null) ctxName = nameOf(worst);
 	setText(refs.vCtx, ctxMax === null ? NA : ctxMax + '%');
-	refs.vCtx.dataset.na = ctxMax === null ? '1' : '0';
+	setData(refs.vCtx, 'na', ctxMax === null ? '1' : '0');
 	setText(refs.sCtx, ctxName);
-	refs.sCtx.dataset.zero = ctxMax === 0 ? '1' : '0';
+	setData(refs.sCtx, 'zero', ctxMax === 0 ? '1' : '0');
 }
 
 function contextLeader() {
@@ -348,8 +394,31 @@ function contextLeader() {
 function paintClock() {
 	const age = receivedAge();
 	setText(refs.recv, age === null ? '最終受信 —' : '最終受信 ' + fmtAgo(age));
-	refs.recv.dataset.stale = age === null || age > 4000 ? '1' : '0';
+	setData(refs.recv, 'stale', age === null || age > 4000 ? '1' : '0');
 	setText(refs.now, fmtClock(serverNow()));
+	// 詳細を開いているときだけ、その「最終受信」の1行も同じ秒で進める。
+	if (detailOpen && detailCells) setText(detailCells[12], age === null ? NA : fmtAgo(age));
+}
+
+/* ── 収集の不調（v2.1 の notes）─────────────────────────────────────────── */
+
+/**
+ * `notes[]` が空でなければ下部に1行だけ出す。空なら何も出さない（高さ0）。
+ * 緑のまま黙るのが一番まずいので、理由が来たら必ず見せる。
+ */
+function renderNotes() {
+	if (!refs.note) return;
+	const notes = model.notes;
+	const parts = [];
+	if (notes) {
+		for (let i = 0; i < notes.length; i += 1) {
+			const line = clampText(String(notes[i] || ''), 60);
+			if (line) parts.push(line);
+		}
+	}
+	const text = parts.join(' / ');
+	setHidden(refs.note, !text);
+	if (text) setText(refs.note, text);
 }
 
 /* ── 一覧（正常・注意）──────────────────────────────────────────────────── */
