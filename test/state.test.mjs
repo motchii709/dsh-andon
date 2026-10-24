@@ -494,12 +494,25 @@ test('the pages and assets are served from disk with the right types', async () 
 test('the state endpoint returns the contract and never throws', async () => {
 	const { mock, routes } = await mountPlugin();
 
+	// 既定は v2 の細い形だけ。v1 キーは `?compat=1` のときだけ載る
+	// （実測で 15,200 B → 979 B の差が出ていた、誰も読まない 66%）。
 	const ok = await call(routes.get('/api/andon/state'), '/api/andon/state');
 	assert.equal(ok.status, 200);
 	const body = JSON.parse(ok.body);
-	assert.equal(body.schema, 1);
-	assert.equal(body.stations.length, 8);
 	assert.equal(ok.headers['cache-control'], 'no-store');
+	for (const key of ['v', 'serverTime', 'seq', 'overall', 'reason', 'counts', 'sessions', 'log', 'history', 'notes']) {
+		assert.ok(key in body, `v2 key missing from the lean payload: ${key}`);
+	}
+	for (const legacy of ['stations', 'cards', 'alerts', 'activity', 'vitals']) {
+		assert.equal(legacy in body, false, `v1 key ${legacy} must stay off the default wire`);
+	}
+
+	// 互換が要るとき（旧画面・スクリーンショット）は明示的に取りに来る。
+	// ルートはパス名で引く（クエリはハンドラに渡る URL 側で解釈される）。
+	const compat = await call(routes.get('/api/andon/state'), '/api/andon/state?compat=1');
+	const wide = JSON.parse(compat.body);
+	assert.equal(wide.schema, 1);
+	assert.equal(wide.stations.length, 8);
 
 	// Now make collection itself fail and ask again.
 	mock.ctx.sessions.list = () => {
@@ -508,10 +521,13 @@ test('the state endpoint returns the contract and never throws', async () => {
 	const broken = await call(routes.get('/api/andon/state'), '/api/andon/state');
 	assert.equal(broken.status, 200, 'a broken collector is still a 200 with a degraded board');
 	const degraded = JSON.parse(broken.body);
-	assert.equal(degraded.schema, 1);
-	assert.equal(degraded.stations.length, 8);
-	assert.equal(degraded.status, 'alert');
-	assert.ok(degraded.notes.length > 0);
+	assert.equal(
+		degraded.overall,
+		'alarm',
+		'§1: a board that cannot see must not read 正常 — 嘘の正常を出さない',
+	);
+	assert.ok(degraded.notes.length > 0, 'the reason rides in notes');
+	assert.ok(degraded.reason.length > 0, 'and in the one-line reason the header shows');
 });
 
 test('health reports whether collection is actually possible', async () => {

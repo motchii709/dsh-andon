@@ -74,8 +74,8 @@ function snapshotFor() {
 			{
 				...base,
 				status: 'ok',
-				counts: Object.fromEntries(Object.keys(base.counts).map((k) => [k, 0])),
-				stations: base.stations.map((s) => ({ ...s, value: 0, suffix: s.suffix, hint: '—', severity: 'ok' })),
+				counts: Object.fromEntries(Object.keys(base.counts ?? {}).map((k) => [k, 0])),
+				stations: (base.stations ?? []).map((s) => ({ ...s, value: 0, suffix: s.suffix, hint: '—', severity: 'ok' })),
 				alerts: [],
 				cards: [],
 				activity: [],
@@ -97,8 +97,8 @@ function snapshotFor() {
 			...base,
 			status: overall === 'normal' ? 'ok' : 'warn',
 			alerts: [],
-			cards: base.cards.filter((card) => card.column !== 'alert'),
-			stations: base.stations.map((s) => ({
+			cards: (base.cards ?? []).filter((card) => card.column !== 'alert'),
+			stations: (base.stations ?? []).map((s) => ({
 				...s,
 				severity: overall === 'normal' ? 'ok' : s.severity === 'alert' ? 'warn' : s.severity,
 				value: s.id === 'needs-you' || s.id === 'jobs' || s.id === 'errors' ? 0 : s.value,
@@ -117,7 +117,7 @@ function snapshotFor() {
 		return out;
 	}
 	if (scenario === 'needs-you') {
-		return withState({ ...base, status: 'warn', alerts: base.alerts.slice(0, 1) }, 'needs-you', '承認待ち 1件', {
+		return withState({ ...base, status: 'warn', alerts: (base.alerts ?? []).slice(0, 1) }, 'needs-you', '承認待ち 1件', {
 			needsYou: Math.max(1, base.counts?.needsYou ?? 1),
 		});
 	}
@@ -127,7 +127,7 @@ function snapshotFor() {
 				...base,
 				status: 'alert',
 				generatedAt: now,
-				stations: base.stations.map((s) => ({ ...s, severity: s.id === 'running' ? 'ok' : 'alert', value: s.value })),
+				stations: (base.stations ?? []).map((s) => ({ ...s, severity: s.id === 'running' ? 'ok' : 'alert', value: s.value })),
 			},
 			'alarm',
 			'承認待ち 6分放置 1件',

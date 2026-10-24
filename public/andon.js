@@ -533,6 +533,7 @@ function renderHistory() {
 	}
 	const ctx = canvas.getContext ? canvas.getContext('2d') : null;
 	if (!ctx) return;
+	perfPainted();
 	ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 	ctx.clearRect(0, 0, width, height);
 
@@ -951,6 +952,7 @@ let polling = false;
 let recoverHits = 0; // 通信断から戻るときの連続受信回数
 
 function onSnapshot(raw) {
+	perfReceived();
 	const wasOffline = offline;
 	lastAt = Date.now();
 	if (raw && num(raw.serverTime) !== null) offset = raw.serverTime - Date.now();
@@ -1079,6 +1081,95 @@ function shiftBoard() {
 	refs.app.style.setProperty('--sy', SHIFTS[shiftIndex][1] + 'px');
 }
 
+/* ── 計測（?perf=1 のときだけ）──────────────────────────────────────────────
+ * 体感ではなく回数で測る。DOM への書き込みは MutationObserver で数える
+ * （描き直しを減らした結果がそのまま数字になる）。canvas は DOM に現れないので
+ * 描画関数の側で数える。`?perf=1` が無ければ、ノードも監視もタイマーも作らない。
+ */
+
+const PERF = /[?&]perf=1/.test(String(location.search || ''));
+const PERF_REPORT_MS = 1000; // 隅の表示を書き換える間隔（これ自体は数えない）
+
+const perf = {
+	node: null,
+	obs: null,
+	writes: 0, // DOM 書き込み（増減したノード＋属性＋文字）
+	paints: 0, // 履歴帯の再描画
+	snapshots: 0, // 受けたスナップショット
+	startedAt: 0,
+	last: '',
+};
+
+/** childList は増減したノード数、属性と文字データは1件1回として数える。 */
+function perfCount(records) {
+	for (let i = 0; i < records.length; i += 1) {
+		const rec = records[i];
+		if (rec.type === 'childList') perf.writes += rec.addedNodes.length + rec.removedNodes.length;
+		else perf.writes += 1;
+	}
+}
+
+/** 1分あたりに直して出す。経過秒数も併記するので途中で撮っても割合で読める。 */
+function perfShow() {
+	if (!perf.node) return;
+	// 監視は非同期なので、表示の直前に取りこぼしを拾う。
+	if (perf.obs) perfCount(perf.obs.takeRecords());
+	const sec = Math.max(1, (Date.now() - perf.startedAt) / 1000);
+	const perMin = (count) => Math.round((count * 60) / sec);
+	const text =
+		'perf ' +
+		Math.round(sec) +
+		's  受信 ' +
+		perf.snapshots +
+		'\nDOM書き込み ' +
+		perf.writes +
+		' → ' +
+		perMin(perf.writes) +
+		'/分\ncanvas再描画 ' +
+		perf.paints +
+		' → ' +
+		perMin(perf.paints) +
+		'/分';
+	if (text !== perf.last) {
+		perf.node.textContent = text;
+		perf.last = text;
+	}
+}
+
+function perfStart() {
+	if (!PERF || perf.node) return;
+	const node = document.createElement('div');
+	node.id = 'perf';
+	node.setAttribute('aria-hidden', 'true');
+	// 見た目のためだけの箱。CSS は増やさず、ここだけで完結させる。
+	node.style.cssText =
+		'position:fixed;right:8px;bottom:8px;z-index:9999;padding:8px;' +
+		'background:rgba(0,0,0,0.85);color:#fff;white-space:pre;' +
+		'font:14px/1.35 ui-monospace,Consolas,monospace;letter-spacing:0;';
+	document.body.appendChild(node);
+	perf.node = node;
+	perf.startedAt = Date.now();
+	if (typeof MutationObserver === 'function' && refs.app) {
+		perf.obs = new MutationObserver(perfCount);
+		perf.obs.observe(refs.app, {
+			childList: true,
+			subtree: true,
+			attributes: true,
+			characterData: true,
+		});
+	}
+	setInterval(perfShow, PERF_REPORT_MS);
+	perfShow();
+}
+
+function perfPainted() {
+	if (PERF) perf.paints += 1;
+}
+
+function perfReceived() {
+	if (PERF) perf.snapshots += 1;
+}
+
 /* ── 起動 ───────────────────────────────────────────────────────────────── */
 
 readQuery();
@@ -1132,6 +1223,7 @@ window.addEventListener('resize', () => {
 });
 
 requestWakeLock();
+perfStart();
 setInterval(shiftBoard, 600000);
 setInterval(() => {
 	if (offline) {
