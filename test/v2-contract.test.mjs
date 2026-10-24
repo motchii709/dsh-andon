@@ -147,10 +147,11 @@ test('no card ever shows the home directory', async () => {
 	// A tool argument like C:\Users\<name>\Documents\...\README.md is 60
 	// characters of home directory. On a shared wall it also names the account.
 	// The collector shortens path-like tool hints to their last two segments.
-	// The fixture has an `edit` tool call whose argument is an absolute path, so
-	// this cannot pass by there being nothing to look at.
-	const withPath = snap.sessions.filter((session) => session.lastOutput?.startsWith('edit:'));
-	assert.ok(withPath.length > 0, 'the fixture must produce an edit hint for this test to mean anything');
+	// The fixture has tool calls whose arguments carry absolute paths (a bare
+	// `path` and a `command` string that contains one), so this cannot pass by
+	// there being nothing to look at. Both shapes must be shortened.
+	const withPath = snap.sessions.filter((session) => /^(edit|pwsh):/u.test(session.lastOutput ?? ''));
+	assert.ok(withPath.length > 0, 'the fixture must produce a tool hint for this test to mean anything');
 
 	for (const session of withPath) {
 		assert.ok(
@@ -159,7 +160,7 @@ test('no card ever shows the home directory', async () => {
 		);
 		assert.match(
 			session.lastOutput,
-			/README\.md/u,
+			/dsh-andon|README\.md/u,
 			'the shortened hint still names the file — dropping the whole value would be worse',
 		);
 	}

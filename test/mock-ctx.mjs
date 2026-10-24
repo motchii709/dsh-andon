@@ -48,7 +48,15 @@ export function createMockCtx(overrides = {}) {
 					path: 'C:\\Users\\<you>\\Documents\\DSH\\playgrounds\\dsh-andon\\README.md',
 				}),
 			}),
-			event('approval/asked', 6, 6, { id: 'ap_1', toolName: 'bash', callId: 'c_9', reason: 'pnpm install を実行します' }),
+			// A command string that *contains* a path. This is the shape the live
+			// board showed as `pwsh: cd "C:\Users\<name>\...`, and the first version
+			// of the shortener let it through because the value is not a bare path.
+			event('tool/call', 4, 39.25, {
+				name: 'pwsh',
+				arguments: JSON.stringify({
+					command: 'cd "C:\\Users\\<you>\\Documents\\DSH\\playgrounds\\dsh-andon"',
+				}),
+			}),			event('approval/asked', 6, 6, { id: 'ap_1', toolName: 'bash', callId: 'c_9', reason: 'pnpm install を実行します' }),
 			// asked then decided, in that order, so the backwards fold has to notice
 			event('approval/asked', 7, 39, { id: 'ap_old', toolName: 'write', callId: 'c_1' }),
 			event('approval/decided', 8, 38, { id: 'ap_old', outcome: 'allowed-once' }),
