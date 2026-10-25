@@ -93,6 +93,42 @@ function fitViewport() {
 	if (h > 0) document.documentElement.style.setProperty('--app-h', `${h}px`);
 }
 
+/* `?diag=1` のときだけ、実測値を画面に出す。
+ *
+ * 実機で「下が切れる」と言われたとき、こちらから画面を見られないと当てずっぽう
+ * になる。ブラウザが申告している高さを本人に読んでもらうのが最短だった。
+ * 通常は一切出ない（要素も作らない）。 */
+function showDiag() {
+	if (String(location.search).indexOf('diag=1') === -1) return;
+	const view = window.visualViewport;
+	const board = refs.board;
+	const ticker = document.querySelector('.ticker');
+	const line = () => {
+		const box = board ? board.getBoundingClientRect() : { height: 0, bottom: 0 };
+		const tick = ticker ? ticker.getBoundingClientRect() : { height: 0, bottom: 0 };
+		return [
+			`inner=${window.innerHeight}`,
+			`vv=${view && view.height ? Math.round(view.height) : 'none'}`,
+			`doc=${document.documentElement.clientHeight}`,
+			`board=${Math.round(box.height)}`,
+			`boardBottom=${Math.round(box.bottom)}`,
+			`ticker=${Math.round(tick.height)}`,
+			`tickerBottom=${Math.round(tick.bottom)}`,
+			`app-h=${getComputedStyle(document.documentElement).getPropertyValue('--app-h').trim() || 'none'}`,
+		].join('  ');
+	};
+	const box = document.createElement('div');
+	box.style.cssText =
+		'position:fixed;left:0;right:0;top:0;z-index:99;background:#000;color:#0f0;' +
+		'font:12px/1.4 monospace;padding:4px 8px;white-space:pre-wrap;pointer-events:none';
+	box.textContent = line();
+	document.body.appendChild(box);
+	setInterval(() => {
+		box.textContent = line();
+	}, 1000);
+}
+
+showDiag();
 fitViewport();
 window.addEventListener('resize', fitViewport);
 window.addEventListener('orientationchange', fitViewport);
