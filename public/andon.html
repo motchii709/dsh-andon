@@ -31,14 +31,21 @@
 			}
 
 			#board {
+				/* 実画面の高さ。`100vh` はブラウザの URL バーを含んだ高さなので、
+				 * バーが出ている間は下（黒いチッカーと全画面ボタン）が画面外に
+				 * 押し出される。Fire タブの Silk は `dvh` 非対応でこれが起きていた。
+				 * andon.js が visualViewport/innerHeight から `--app-h` を入れ、
+				 * 取れない環境では 100vh に落ちる。 */
 				height: 100vh;
 				height: 100dvh;
+				height: var(--app-h, 100dvh);
 				display: grid;
 				grid-template-columns: clamp(300px, 23vw, 452px) minmax(0, 1fr);
 				grid-template-rows: minmax(0, 1fr) auto;
 				gap: 10px;
 				padding: 10px;
 				background: #08090a;
+				box-sizing: border-box;
 			}
 
 			/* The three states. Near-black type on all of them: on a saturated
@@ -349,13 +356,19 @@
 			 * the andon does not point at it any more. */
 
 			.fs {
+				/* 色面の右下に固定。黒い帯の中に置くと、ブラウザの URL バーで
+				 * 帯が切れたときに押せなくなる（Fire タブで実際に起きた）。
+				 * 色面は常に見えているので、そこに置けば位置の計算に依存しない。 */
+				position: absolute;
+				right: clamp(8px, 1vw, 18px);
+				bottom: clamp(8px, 1vh, 18px);
+				z-index: 3;
 				display: inline-flex;
 				align-items: center;
 				justify-content: center;
 				min-width: 44px;
 				min-height: 44px;
 				padding: 0;
-				margin-left: clamp(8px, 1vw, 16px);
 				background: transparent;
 				border: 1px solid rgba(255, 255, 255, 0.22);
 				border-radius: 6px;
@@ -525,6 +538,10 @@
 				<!-- どのセッションが問題か。色と状態語だけでは「要対応」しか
 				     分からず、開くべきセッションを探す手間が残る。 -->
 				<ul id="status-who" class="who" aria-label="問題のセッション"></ul>
+				<!-- 全画面の切替。黒い帯の中に置くと、ブラウザの URL バーで帯が
+				     切れたときに押せなくなる（Fire タブで実際に起きた）。色面は
+				     常に見えているので、その右下に固定する。目立たせない。 -->
+				<button class="fs" id="fs" type="button" aria-label="全画面の切替" title="全画面（F）">⛶</button>
 			</section>
 
 			<footer class="ticker">
@@ -534,9 +551,6 @@
 						<i class="conn-dot"></i><span data-role="conn-label">LIVE</span>
 					</div>
 					<div class="clock num" id="clock">--:--:--</div>
-					<!-- 全画面の切替。Fire タブではブラウザの帯が画面を食うので、
-					     この一箇所だけ操作を許す。目立たせないが、指で押せる大きさは保つ。 -->
-					<button class="fs" id="fs" type="button" aria-label="全画面の切替" title="全画面（F）">⛶</button>
 				</div>
 				<p class="notes" id="notes" hidden></p>
 			</footer>

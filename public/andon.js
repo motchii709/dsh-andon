@@ -80,6 +80,23 @@ if (refs.fs) {
 		refs.fs.hidden = true;
 	}
 }
+/* 実画面の高さを CSS 変数に入れる。
+ *
+ * `100vh` はブラウザの URL バーを含む高さなので、バーが出ている間は盤の下端
+ * （黒いチッカーと全画面ボタン）が画面外に出る。Fire タブの Silk は `dvh` を
+ * 解釈しないため、そのままでは下が切れて押せない。visualViewport があれば
+ * それ（実際に見えている高さ）、無ければ innerHeight を使う。
+ * 回転・バー伸縮・全画面の出入りで値が変わるので、resize のたびに入れ直す。 */
+function fitViewport() {
+	const view = window.visualViewport;
+	const h = Math.round((view && view.height) || window.innerHeight || 0);
+	if (h > 0) document.documentElement.style.setProperty('--app-h', `${h}px`);
+}
+
+fitViewport();
+window.addEventListener('resize', fitViewport);
+window.addEventListener('orientationchange', fitViewport);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitViewport);
 const connection = createConnection(refs.conn, { staleAfterMs: 6000 });
 startClock(refs.clock);
 
