@@ -79,7 +79,16 @@
   "counts": {
     "needsYou": 0,               // 要対応セッション数
     "running": 3,                // 実行中セッション数
-    "contextMax": 82             // 全セッションの最大 contextPct（0..100 の整数）
+    "contextMax": 82,            // 全セッションの最大 contextPct（0..100 の整数）
+    // 以下はレール8局を画面側で組み立てるための数字（合計 ~100B）。
+    // これがあるおかげで画面は `?compat=1`（v1 キー入り・約12KB）を読まなくて済む。
+    "sessions": 8,               // 生存セッション数
+    "jobsRunning": 1,            // 稼働中ジョブ
+    "jobsFailed": 0,             // 失敗ジョブ（2時間窓）
+    "subagents": 0,              // 稼働中サブエージェント
+    "goalsBlocked": 0,           // 遮断された目標
+    "goalsPaused": 0,            // 休止中の目標
+    "errors": 0                  // 異常計（失敗ジョブ＋診断＋起動失敗）
   },
   "sessions": [
     {

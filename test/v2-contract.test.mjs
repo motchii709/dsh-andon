@@ -22,11 +22,22 @@ import { createMockCtx, settle } from './mock-ctx.mjs';
 const STATES = ['normal', 'watch', 'needs-you', 'alarm'];
 const STATUSES = ['running', 'idle', 'error', 'stopped'];
 
+/** The compat form: what `?compat=1` serves, for tools and the old page. */
+async function compatWith(overrides) {
+	const mock = createMockCtx(overrides);
+	const collector = createCollector(mock.ctx, overrides && overrides.collectorOptions);
+	await settle(6);
+	const snap = JSON.parse(JSON.stringify(collector.snapshot({ compat: true })));
+	collector.dispose();
+	return snap;
+}
 async function snapshotWith(overrides) {
 	const mock = createMockCtx(overrides);
 	const collector = createCollector(mock.ctx, overrides?.collectorOptions);
 	await settle(6);
-	const snap = collector.snapshot();
+	// The client sees the *wire* form, which `toJSON` decides. Asserting on the
+	// in-process object would pass for keys that never reach a browser.
+	const snap = JSON.parse(JSON.stringify(collector.snapshot()));
 	collector.dispose();
 	return snap;
 }
@@ -54,7 +65,8 @@ test('the snapshot carries the v2 envelope', async () => {
 	assert.notEqual(snap.overall, 'offline', 'offline is the client’s call — the server cannot know it');
 	assert.equal(typeof snap.reason, 'string');
 
-	for (const key of ['needsYou', 'running', 'contextMax']) {
+	// レール8局を軽い形から組めること（これが無いと画面が compat を読む羽目になる）。
+	for (const key of ['needsYou', 'running', 'contextMax', 'sessions', 'jobsRunning', 'jobsFailed', 'subagents', 'goalsBlocked', 'goalsPaused', 'errors']) {
 		assert.ok(Number.isFinite(snap.counts[key]), `counts.${key} is missing`);
 	}
 	assert.ok(Array.isArray(snap.sessions), 'sessions[] is what the new board is built from');
@@ -208,12 +220,17 @@ test('a running session that goes quiet becomes 注意 (§11-5)', async () => {
 	assert.equal(only.state, 'watch', 'running but silent for 5 minutes is 注意');
 	assert.match(only.reason, /無反応|出力/u);
 });
-test('the v1 keys still work while the board is being replaced', async () => {
-	const snap = await snapshotWith();
+test('v1 keys ride along only when explicitly asked for', async () => {
+	const legacyKeys = ['schema', 'generatedAt', 'status', 'host', 'stations', 'alerts', 'cards', 'activity', 'vitals'];
+	const lean = await snapshotWith();
+	for (const key of legacyKeys) {
+		assert.equal(key in lean, false, `v1 key ${key} must stay off the default wire`);
+	}
 
-	// The old page and tools/shots.mjs still read these. Dropping them mid-migration
-	// would make it impossible to tell a new bug from a missing key.
-	for (const key of ['schema', 'generatedAt', 'status', 'host', 'counts', 'stations', 'alerts', 'cards', 'activity', 'vitals', 'notes']) {
-		assert.ok(key in snap, `v1 key disappeared: ${key}`);
+	// `?compat=1` / legacyPayload — the old page, tools/shots.mjs, and anyone
+	// migrating still needs one request that has everything.
+	const wide = await compatWith();
+	for (const key of legacyKeys) {
+		assert.ok(key in wide, `compat payload is missing ${key}`);
 	}
 });

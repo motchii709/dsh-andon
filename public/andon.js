@@ -21,6 +21,7 @@ import {
 	createConnection,
 	createPoller,
 	fmtClockShort,
+	fmtDur,
 	fmtDurLong,
 	h,
 	setTitle,
@@ -92,6 +93,75 @@ function setText(node, text) {
 	if (node.textContent !== value) node.textContent = value;
 }
 
+/** レール8局を、v2 の細い形（counts）から組み立てる。
+ *
+ *  サーバの stations と同じ定義・同じ並び・同じ severity にする（画面と
+ *  数字が食い違うと「どちらが本当か」を読み手に考えさせる）。足りない値は
+ *  0 ではなく「—」を出す: 0 は「無い」という主張になる。 */
+function buildStations(state) {
+	const c = state.counts || {};
+	const n = (key) => (typeof c[key] === 'number' ? c[key] : null);
+	const dash = (v) => (v === null ? '—' : String(v));
+	const jobsFailed = n('jobsFailed');
+	const goalsBlocked = n('goalsBlocked');
+	const goalsPaused = n('goalsPaused');
+	const contextMax = n('contextMax');
+	const errors = n('errors');
+	return [
+		{
+			id: 'needs-you',
+			label: '要対応',
+			value: c.needsYou || 0,
+			suffix: '',
+			hint: c.needsYou ? `承認・入力待ち ${c.needsYou}` : '—',
+			severity: c.needsYou > 0 ? 'alert' : 'ok',
+		},
+		{ id: 'running', label: '実行中', value: c.running || 0, suffix: '', hint: 'エージェント', severity: 'ok' },
+		{ id: 'sessions', label: 'セッション', value: c.sessions || 0, suffix: '', hint: '生存のみ', severity: 'ok' },
+		{
+			id: 'jobs',
+			label: 'ジョブ',
+			value: jobsFailed === null ? '—' : jobsFailed,
+			suffix: '',
+			hint: `稼働 ${dash(n('jobsRunning'))} / 失敗 ${dash(jobsFailed)}`,
+			severity: jobsFailed > 0 ? 'alert' : 'ok',
+		},
+		{ id: 'subagents', label: 'サブ', value: dash(n('subagents')), suffix: '', hint: '—', severity: 'ok' },
+		{
+			id: 'goals',
+			label: '目標',
+			value: goalsBlocked === null && goalsPaused === null ? '—' : (goalsBlocked || 0) + (goalsPaused || 0),
+			suffix: '',
+			hint: `遮断 ${dash(goalsBlocked)} / 休止 ${dash(goalsPaused)}`,
+			severity: goalsBlocked > 0 || goalsPaused > 0 ? 'warn' : 'ok',
+		},
+		{
+			id: 'context',
+			label: '文脈',
+			value: contextMax === null ? '—' : contextMax,
+			suffix: contextMax === null ? '' : '%',
+			hint: '最大',
+			severity: contextMax >= 90 ? 'alert' : contextMax >= 75 ? 'warn' : 'ok',
+		},
+		{
+			id: 'errors',
+			label: '異常',
+			value: errors === null ? '—' : errors,
+			suffix: '',
+			hint: '失敗・診断',
+			severity: errors > 0 ? 'alert' : 'ok',
+		},
+	];
+}
+
+/** v2 の log[{at,session,severity,text}] を、v1 の activity 形に寄せる。 */
+function logAsActivity(log) {
+	return (log || []).map((line) => ({
+		at: line.at,
+		severity: line.severity,
+		text: line.session ? `${line.session}: ${line.text}` : line.text,
+	}));
+}
 function renderStations(stations, v2counts) {
 	// v1 の「要対応」は承認待ちしか数えない。v2 の needsYou は入力待ちも含むので、
 	// 大表示（要対応 n件）とレールの数字が食い違う。盤の数字同士が矛盾すると
@@ -236,15 +306,12 @@ function render(state) {
 	setText(refs.alertCount, String(bigNumber));
 	refs.counter.dataset.sev = bigNumber ? 'alert' : 'ok';
 
-	renderStations(state.stations || [], state.counts);
-	renderTicker(alerts, state.activity || []);
+	renderStations(buildStations(state));
+	renderTicker([], logAsActivity(state.log));
 
-	const vitals = state.vitals || {};
-	const host = state.host || {};
-	const bits = [];
-	if (vitals.profile) bits.push(vitals.profile);
-	if (Number.isFinite(host.uptimeSec)) bits.push(`稼働 ${fmtDurLong(host.uptimeSec * 1000)}`);
-	setText(refs.host, bits.join(' · ') || '—');
+	// 軽い形（v2）には profile も uptime も無い。推測で出さない代わりに、
+	// 「いつ時点の情報か」を出す。フリーズ検知の役目も兼ねる。
+	setText(refs.host, lastGoodAt ? `最終受信 ${fmtDur(now - lastGoodAt)}前` : '—');
 
 	const notes = state.notes || [];
 	if (notes.length) {
@@ -272,7 +339,7 @@ function renderError(_error, failures, lastGood) {
 }
 
 const poller = createPoller({
-	url: '/api/andon/state?compat=1',
+	url: '/api/andon/state',
 	intervalMs: 2000,
 	onData: (state) => {
 		try {
