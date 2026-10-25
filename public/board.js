@@ -298,9 +298,37 @@ export function setTitle(status, base) {
 	if (document.title !== next) document.title = next;
 }
 
+/** True when this browser can go fullscreen at all. Amazon Silk on Fire OS 5
+ *  only implements the webkit-prefixed API, so checking just the standard name
+ *  hides the control on exactly the device that needs it. */
+export function canFullscreen() {
+	const el = document.documentElement;
+	return Boolean(el.requestFullscreen || el.webkitRequestFullscreen);
+}
+
+export function isFullscreen() {
+	return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+/** Toggle fullscreen, with the prefixed fallbacks old Silk needs.
+ *
+ *  On the Fire tab the browser chrome (URL bar, tabs) eats a slab of the screen
+ *  and the board is meant to be glanced at from a distance, so this is worth a
+ *  tap target. Failures are swallowed: a tap that does nothing is better than an
+ *  exception on a wall board. */
 export function toggleFullscreen() {
-	if (document.fullscreenElement) document.exitFullscreen();
-	else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+	try {
+		if (isFullscreen()) {
+			if (document.exitFullscreen) document.exitFullscreen();
+			else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+			return;
+		}
+		const el = document.documentElement;
+		if (el.requestFullscreen) el.requestFullscreen();
+		else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+	} catch {
+		/* a browser that refuses is not an error worth showing */
+	}
 }
 
 /* ── keyboard ────────────────────────────────────────────────────────────── */

@@ -19,13 +19,16 @@ import {
 	clampText,
 	clear,
 	createConnection,
+	canFullscreen,
 	createPoller,
 	fmtClockShort,
 	fmtDur,
 	fmtDurLong,
 	h,
+	isFullscreen,
 	setTitle,
 	startClock,
+	toggleFullscreen,
 } from './board.js';
 
 const $ = (id) => document.getElementById(id);
@@ -45,6 +48,8 @@ const refs = {
 	board: $('board'),
 	statusWord: $('status-word'),
 	statusSub: $('status-sub'),
+	statusWho: $('status-who'),
+	fs: $('fs'),
 	counter: $('counter'),
 	alertCount: $('alert-count'),
 	host: $('host'),
@@ -60,6 +65,21 @@ for (const id of STATION_IDS) {
 	refs.rows[id] = el ? { el, value: el.querySelector('.sr-v') } : null;
 }
 
+// 全画面ボタン。API が無い環境では出さない（押しても何も起きないボタンは嘘）。
+if (refs.fs) {
+	if (canFullscreen()) {
+		refs.fs.addEventListener('click', () => {
+			toggleFullscreen();
+			// 反映は非同期なので、状態が変わったらだけ印を付け直す
+			setTimeout(() => {
+				document.body.dataset.fs = isFullscreen() ? '1' : '0';
+			}, 120);
+		});
+		document.body.dataset.fs = isFullscreen() ? '1' : '0';
+	} else {
+		refs.fs.hidden = true;
+	}
+}
 const connection = createConnection(refs.conn, { staleAfterMs: 6000 });
 startClock(refs.clock);
 
@@ -93,6 +113,34 @@ function setText(node, text) {
 	if (node.textContent !== value) node.textContent = value;
 }
 
+/** どのセッションが問題か。色と状態語だけでは「要対応」しか伝わらず、
+ *  開くべきセッションを探す手間が残る（実機を見た指摘）。
+ *
+ *  正常のときは空。名前は 40 文字で切り、3件まで出して残りは「他N件」。 */
+function renderWho(state) {
+	const host = refs.statusWho;
+	if (!host) return;
+	const list = (state.sessions || [])
+		.filter((s) => s.state === 'needs-you' || s.state === 'alarm')
+		.sort((a, b) => (a.state === 'alarm' ? -1 : 0) - (b.state === 'alarm' ? -1 : 0) || (a.since || 0) - (b.since || 0));
+	clear(host);
+	if (!list.length || state.overall === 'normal') {
+		host.hidden = true;
+		return;
+	}
+	host.hidden = false;
+	for (const session of list.slice(0, 3)) {
+		const li = h('li');
+		li.appendChild(h('span', { text: clampText(session.name || session.id || '', 40) }));
+		if (session.reason) {
+			li.appendChild(h('span', { class: 'who-why', text: `  ${clampText(session.reason, 24)}` }));
+		}
+		host.appendChild(li);
+	}
+	if (list.length > 3) {
+		host.appendChild(h('li', { class: 'who-why', text: `他${list.length - 3}件` }));
+	}
+}
 /** 静かなときの一行。数字だけを並べる（形容詞は書かない）。 */
 function calmLine(state) {
 	const c = state.counts || {};
@@ -322,6 +370,7 @@ function render(state) {
 	setText(refs.alertCount, String(bigNumber));
 	refs.counter.dataset.sev = bigNumber ? 'alert' : 'ok';
 
+	renderWho(state);
 	renderStations(buildStations(state));
 	renderTicker([], logAsActivity(state.log, state.overall));
 
