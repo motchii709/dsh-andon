@@ -44,16 +44,50 @@ await settle(6);
  *  remembered here, because the page itself polls the API without params. */
 let scenario = 'busy';
 
-/** Rewrite the v2 fields for a scenario.
+/** Attach the lean wire shape, the way the real collector does with `toJSON`.
  *
- *  `overall` and each session's `state` are judged on the server, so patching
- *  only the v1 keys left every scenario looking like 異常 on the new board —
- *  which made 正常 and 注意 impossible to screenshot deterministically. A
- *  scenario has to describe the whole board, not half of it. */
-function withState(base, overall, reason, { needsYou = 0 } = {}) {
+ *  `{ ...base }` silently drops the collector's non-enumerable `toJSON`, so the
+ *  scenarios were being served as the **heavy** shape (v1 keys and all) while
+ *  the real host serves the lean one. Screenshots taken through that difference
+ *  were not testing what a browser actually gets. */
+function lean(doc) {
+	const counts = doc.counts ?? {};
+	const wire = {
+		v: 2,
+		serverTime: doc.serverTime,
+		seq: doc.seq,
+		build: doc.build,
+		overall: doc.overall,
+		reason: doc.reason ?? '',
+		counts: {
+			needsYou: counts.needsYou ?? 0,
+			running: counts.running ?? counts.agentsRunning ?? 0,
+			contextMax: counts.contextMax ?? 0,
+			sessions: counts.sessions ?? counts.liveSessions ?? 0,
+			jobsRunning: counts.jobsRunning ?? 0,
+			jobsFailed: counts.jobsFailed ?? 0,
+			subagents: counts.subagents ?? counts.subagentsRunning ?? 0,
+			goalsBlocked: counts.goalsBlocked ?? 0,
+			goalsPaused: counts.goalsPaused ?? 0,
+			errors: counts.errors ?? 0,
+		},
+		sessions: doc.sessions ?? [],
+		log: doc.log ?? [],
+		history: doc.history ?? [],
+		notes: doc.notes ?? [],
+	};
+	return wire;
+}
+
+/** Rewrite the whole board for a scenario — v2 fields **and** the numbers the
+ *  rail is built from. Patching only one half made the board contradict itself
+ *  (a green 正常 field next to a red ジョブ 2), which is exactly the failure mode
+ *  a fixture must never teach. */
+function withState(base, overall, reason, { needsYou = 0, jobsFailed = 0 } = {}) {
+	const alarmValued = overall === 'normal' || overall === 'watch' ? 0 : needsYou;
 	const sessions = (base.sessions ?? []).map((session) => ({
 		...session,
-		state: overall,
+		state: overall === 'normal' ? 'normal' : overall === 'watch' ? session.state : overall,
 		reason: overall === 'normal' ? '' : session.reason || reason,
 	}));
 	return {
@@ -61,11 +95,30 @@ function withState(base, overall, reason, { needsYou = 0 } = {}) {
 		overall,
 		reason,
 		sessions,
-		counts: { ...base.counts, needsYou },
+		counts: {
+			...base.counts,
+			needsYou: alarmValued,
+			jobsFailed,
+			// 正常・注意のときは、警報値を名乗る数字を 0 に落とす。
+			// そうしないと「緑なのにジョブ失敗 2」という盤ができる。
+			goalsBlocked: overall === 'normal' || overall === 'watch' ? 0 : (base.counts?.goalsBlocked ?? 0),
+			goalsPaused: overall === 'normal' || overall === 'watch' ? 0 : (base.counts?.goalsPaused ?? 0),
+			errors: overall === 'normal' || overall === 'watch' ? 0 : (base.counts?.errors ?? 0),
+			// 文脈 % も警告線（75%）を跨ぐと、正常なのに橙のセルが出る。
+			// 正常のシナリオでは警告線の下に落とす。
+			contextMax: overall === 'normal' ? Math.min(base.counts?.contextMax ?? 0, 60) : (base.counts?.contextMax ?? 0),
+		},
 	};
 }
 
+/** What the server hands the browser: the scenario, trimmed to the lean wire
+ *  shape. Wrapping here (not at each call site) keeps the scenarios readable and
+ *  guarantees every one of them goes through the same trim. */
 function snapshotFor() {
+	return lean(scenarioDoc());
+}
+/** The scenario document, before it is trimmed to the wire shape. */
+function scenarioDoc() {
 	const now = Date.now();
 	if (scenario === 'busy') return collector.snapshot();
 	const base = collector.snapshot();

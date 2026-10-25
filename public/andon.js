@@ -93,6 +93,13 @@ function setText(node, text) {
 	if (node.textContent !== value) node.textContent = value;
 }
 
+/** 静かなときの一行。数字だけを並べる（形容詞は書かない）。 */
+function calmLine(state) {
+	const c = state.counts || {};
+	const running = typeof c.running === 'number' ? c.running : 0;
+	const sessions = typeof c.sessions === 'number' ? c.sessions : 0;
+	return `異常なし · 実行中 ${running} · セッション ${sessions}`;
+}
 /** レール8局を、v2 の細い形（counts）から組み立てる。
  *
  *  サーバの stations と同じ定義・同じ並び・同じ severity にする（画面と
@@ -154,13 +161,20 @@ function buildStations(state) {
 	];
 }
 
-/** v2 の log[{at,session,severity,text}] を、v1 の activity 形に寄せる。 */
-function logAsActivity(log) {
-	return (log || []).map((line) => ({
-		at: line.at,
-		severity: line.severity,
-		text: line.session ? `${line.session}: ${line.text}` : line.text,
-	}));
+/** v2 の log[{at,session,severity,text}] を、v1 の activity 形に寄せる。
+ *
+ *  正常のときは平穏な行だけ流す。緑の全面に赤い「承認待ち」が並ぶと、
+ *  盤が「正常」と「要対応」を同時に主張していることになり、どちらを信じるか
+ *  読み手に考えさせる。警報色の行は、警報が出ているときだけ出す。 */
+function logAsActivity(log, overall) {
+	const calm = overall === 'normal';
+	return (log || [])
+		.filter((line) => !calm || line.severity === 'ok')
+		.map((line) => ({
+			at: line.at,
+			severity: line.severity,
+			text: line.session ? `${line.session}: ${line.text}` : line.text,
+		}));
 }
 function renderStations(stations, v2counts) {
 	// v1 の「要対応」は承認待ちしか数えない。v2 の needsYou は入力待ちも含むので、
@@ -296,7 +310,9 @@ function render(state) {
 
 	setText(refs.statusWord, word);
 	// サーバの理由（「入力待ち 1件」など）があればそれを出す。無ければ v1 の内訳。
-	setText(refs.statusSub, state.reason ? state.reason : statusSubline(state));
+	// 理由行はサーバの reason を優先。無いときは v2 の数字から作る
+	// （軽い形に v1 の `status` は無いので、statusSubline は使えない）。
+	setText(refs.statusSub, state.reason ? state.reason : calmLine(state));
 	// 右の大きな数字は「いま人が動くべき件数」。v1 は alerts.length（承認待ち・
 	// ジョブ失敗）だが、v2 の needsYou は入力待ちも含むため、そのままだと
 	// レールの「要対応 1」と大表示の「0 件」が並んで矛盾する。同じ値を使う。
@@ -307,7 +323,7 @@ function render(state) {
 	refs.counter.dataset.sev = bigNumber ? 'alert' : 'ok';
 
 	renderStations(buildStations(state));
-	renderTicker([], logAsActivity(state.log));
+	renderTicker([], logAsActivity(state.log, state.overall));
 
 	lastGoodAt = now;
 	// 軽い形（v2）には profile も uptime も無い。推測で出さない代わりに、
