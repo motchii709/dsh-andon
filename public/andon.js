@@ -309,6 +309,7 @@ function render(state) {
 	renderStations(buildStations(state));
 	renderTicker([], logAsActivity(state.log));
 
+	lastGoodAt = now;
 	// 軽い形（v2）には profile も uptime も無い。推測で出さない代わりに、
 	// 「いつ時点の情報か」を出す。フリーズ検知の役目も兼ねる。
 	setText(refs.host, lastGoodAt ? `最終受信 ${fmtDur(now - lastGoodAt)}前` : '—');
@@ -321,7 +322,6 @@ function render(state) {
 		refs.notes.hidden = true;
 	}
 
-	lastGoodAt = now;
 	document.body.dataset.down = '0';
 	document.body.dataset.stale = '0';
 	connection.update();
