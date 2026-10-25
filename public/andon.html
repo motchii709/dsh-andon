@@ -31,14 +31,21 @@
 			}
 
 			#board {
-				/* 実画面の高さ。`100vh` はブラウザの URL バーを含んだ高さなので、
-				 * バーが出ている間は下（黒いチッカーと全画面ボタン）が画面外に
-				 * 押し出される。Fire タブの Silk は `dvh` 非対応でこれが起きていた。
-				 * andon.js が visualViewport/innerHeight から `--app-h` を入れ、
-				 * 取れない環境では 100vh に落ちる。 */
+				/* 盤の箱は「見えている領域」そのもの。
+				 *
+				 * `100vh` はブラウザの URL バーを含んだ高さなので、バーが出ている
+				 * 間は盤が実画面より高くなり、下端（黒いチッカー）が画面外へ出る。
+				 * JS で visualViewport を測る案も試したが、端末によっては innerHeight
+				 * がバー込みの値を返し、焼け石に水だった。
+				 * `position: fixed` + `inset: 0` は描画されている箱に追従するので、
+				 * 高さを数値で当てにいかなくて済む。height は古い実装向けの控え。 */
+				position: fixed;
+				top: 0;
+				right: 0;
+				bottom: 0;
+				left: 0;
 				height: 100vh;
-				height: 100dvh;
-				height: var(--app-h, 100dvh);
+				height: var(--app-h, 100vh);
 				display: grid;
 				grid-template-columns: clamp(300px, 23vw, 452px) minmax(0, 1fr);
 				grid-template-rows: minmax(0, 1fr) auto;
@@ -276,6 +283,10 @@
 			/* ── ticker: what called, and the clock ─────────────────────── */
 			.ticker {
 				grid-column: 1 / -1;
+				/* 帯が伸びすぎて盤を押し出さないよう上限を設ける。中身は下の
+				 * 高さメディアクエリで行数を減らして収める。 */
+				max-height: 34vh;
+				overflow: hidden;
 				display: grid;
 				grid-template-columns: minmax(0, 1fr) auto;
 				align-items: center;
@@ -473,7 +484,23 @@
 					font-size: clamp(52px, 12vw, 130px);
 				}
 			}
-		</style>
+
+			/* 高さが足りない端末では、帯の段数を減らして盤の本体を守る。
+			 * 「下が切れる」より「ログが1行減る」ほうがまし。 */
+			@media (max-height: 620px) {
+				.trow:nth-child(3) {
+					display: none;
+				}
+			}
+
+			@media (max-height: 520px) {
+				.trow:nth-child(2) {
+					display: none;
+				}
+				.ticker {
+					max-height: 26vh;
+				}
+			}		</style>
 		<!-- Material 3 Expressive layer, loaded LAST on purpose: it overrides
 		     the page rules above (shape scale, tonal surfaces, the phone
 		     breakpoint). Loaded before <style>, its phone rules lost to the
