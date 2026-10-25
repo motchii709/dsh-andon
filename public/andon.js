@@ -87,10 +87,35 @@ if (refs.fs) {
  * 解釈しないため、そのままでは下が切れて押せない。visualViewport があれば
  * それ（実際に見えている高さ）、無ければ innerHeight を使う。
  * 回転・バー伸縮・全画面の出入りで値が変わるので、resize のたびに入れ直す。 */
-function fitViewport() {
+function visibleHeight() {
 	const view = window.visualViewport;
-	const h = Math.round((view && view.height) || window.innerHeight || 0);
+	return Math.round((view && view.height) || window.innerHeight || 0);
+}
+
+/* 盤が画面からはみ出していたら、中身を段階的に詰める。
+ *
+ * 高さの報告値が端末によって嘘をつく（URL バー込みで返す）ことがあり、
+ * 測って CSS に入れるだけでは直らなかった。ここでは**結果**を見る:
+ * 盤の下端が実際の表示領域を超えていたら、ログの行を落とし、余白と文字を
+ * 詰めて、超えなくなるまで最大3段階で縮める。原因が何であれ「切れない」に
+ * 寄せるための最後の砦。 */
+function fitContent() {
+	const board = refs.board;
+	if (!board) return;
+	document.body.removeAttribute('data-compact');
+	for (let step = 1; step <= 3; step += 1) {
+		const box = board.getBoundingClientRect();
+		const visible = visibleHeight();
+		if (visible <= 0) return;
+		if (Math.round(box.bottom) <= visible + 1) return;
+		document.body.dataset.compact = String(step);
+	}
+}
+
+function fitViewport() {
+	const h = visibleHeight();
 	if (h > 0) document.documentElement.style.setProperty('--app-h', `${h}px`);
+	fitContent();
 }
 
 /* `?diag=1` のときだけ、実測値を画面に出す。
@@ -441,6 +466,7 @@ function render(state) {
 	}
 
 	document.body.dataset.down = '0';
+	fitContent();
 	document.body.dataset.stale = '0';
 	connection.update();
 	setTitle(status, 'DSH アンドン');

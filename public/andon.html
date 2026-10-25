@@ -500,6 +500,36 @@
 				.ticker {
 					max-height: 26vh;
 				}
+			}
+			/* はみ出しの自動縮小（andon.js の fitContent が付ける）。
+			 * 1: ログの3行目を落とす / 2: 2行目も落として余白を詰める /
+			 * 3: 色面の余白と文字をさらに詰める。 */
+			body[data-compact="1"] .trow:nth-child(3) {
+				display: none;
+			}
+
+			body[data-compact="2"] .trow:nth-child(2),
+			body[data-compact="3"] .trow:nth-child(2) {
+				display: none;
+			}
+
+			body[data-compact="2"] .field,
+			body[data-compact="3"] .field {
+				padding-top: clamp(10px, 1.6vh, 22px);
+				padding-bottom: clamp(10px, 1.6vh, 22px);
+			}
+
+			body[data-compact="3"] #status-word {
+				font-size: clamp(56px, 8vw, 150px);
+			}
+
+			body[data-compact="3"] #status-sub,
+			body[data-compact="3"] .who li {
+				font-size: clamp(14px, 1.6vw, 28px);
+			}
+
+			body[data-compact="3"] .ticker {
+				max-height: 24vh;
 			}		</style>
 		<!-- Material 3 Expressive layer, loaded LAST on purpose: it overrides
 		     the page rules above (shape scale, tonal surfaces, the phone
