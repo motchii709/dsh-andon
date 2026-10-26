@@ -99,9 +99,41 @@ function visibleHeight() {
  * 盤の下端が実際の表示領域を超えていたら、ログの行を落とし、余白と文字を
  * 詰めて、超えなくなるまで最大3段階で縮める。原因が何であれ「切れない」に
  * 寄せるための最後の砦。 */
+/* `?compact=1|2|3` で詰め方を手動指定できる（`?compact=0` で解除）。
+ *
+ * 自動判定が外れる端末（ブラウザの高さ報告が嘘をつく等）でも、本人が
+ * 「この詰め方でいい」と決められるようにするための逃げ道。指定は
+ * localStorage に残すので、次に開いたときも同じ詰め方になる。
+ * 自動判定より手動指定を優先する（本人の目が一番確か）。 */
+function manualCompact() {
+	const raw = String(location.search);
+	const found = /[?&]compact=([0-3])/.exec(raw);
+	let level = null;
+	if (found) {
+		level = Number(found[1]);
+		try {
+			if (level) localStorage.setItem('andon:compact', String(level));
+			else localStorage.removeItem('andon:compact');
+		} catch {
+			/* 保存できない環境ではその場の指定だけ効く */
+		}
+		return level;
+	}
+	try {
+		const saved = Number(localStorage.getItem('andon:compact'));
+		return saved >= 1 && saved <= 3 ? saved : null;
+	} catch {
+		return null;
+	}
+}
 function fitContent() {
 	const board = refs.board;
 	if (!board) return;
+	const manual = manualCompact();
+	if (manual) {
+		document.body.dataset.compact = String(manual);
+		return;
+	}
 	document.body.removeAttribute('data-compact');
 	for (let step = 1; step <= 3; step += 1) {
 		const box = board.getBoundingClientRect();
