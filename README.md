@@ -53,6 +53,7 @@ DSH 層の色は推測ではなくハーネス本体から写している（`@de
 | PC（最新の Edge / Chrome） | 確認済み（1920×1080） |
 | タブレット（iPad・Android・Fire タブ横向き 1280×800） | 確認済み |
 | スマホ（390 CSS px） | 確認済み |
+| Fire 7 第5世代（Fire OS 5.1.1 / Chrome 95・Silk 65 / 600×1024 横向き） | 実機確認済み。`?diag=1` で `inner=432 board=432 boardBottom=432 tickerBottom=422`（修正前は `board=528`） |
 
 **Amazon Fire タブ（Fire OS 5 / Silk）** は Chromium が 80 より前なので、素直に書くと盤は「読み込み中」のまま止まる。そのため次を守っている（守られていることをテストが見張っている）。
 

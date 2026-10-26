@@ -696,15 +696,19 @@ test('the board takes its height from its four edges, never from the viewport', 
 	// at 0 *is* the visible area — and this test keeps it that way.
 	for (const file of ['andon.html', 'md3ex.css']) {
 		const source = readFileSync(new URL(`../public/${file}`, import.meta.url), 'utf8');
+		// Comments are stripped first: the explanation of this very bug names
+		// `height: 100vh`, and a guard that reads prose would either miss the
+		// real declaration or fire on the note that documents it.
+		const body = source.replace(/\/\*[\s\S]*?\*\//g, '');
 		const rule = /#board\s*\{([^}]*)\}/g;
-		let match = rule.exec(source);
+		let match = rule.exec(body);
 		while (match !== null) {
 			assert.ok(
 				!/(?:^|[;{\s])height\s*:/m.test(match[1]),
 				`${file} gives #board a height; the four edges must decide it ` +
 					'(a viewport-based height is what cut the ticker and the 全画面 button)',
 			);
-			match = rule.exec(source);
+			match = rule.exec(body);
 		}
 	}
 });
