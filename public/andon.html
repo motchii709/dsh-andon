@@ -51,6 +51,9 @@
 				grid-template-rows: minmax(0, 1fr) auto;
 				gap: 10px;
 				padding: 10px;
+				/* 画面の底に固定した帯のぶん、盤の下端を空ける。
+				 * `--ticker-h` は andon.js が実測して入れる（帯の高さは行数で変わる）。 */
+				padding-bottom: calc(var(--ticker-h, 120px) + 20px);
 				background: #08090a;
 				box-sizing: border-box;
 			}
@@ -282,9 +285,19 @@
 
 			/* ── ticker: what called, and the clock ─────────────────────── */
 			.ticker {
-				grid-column: 1 / -1;
-				/* 帯が伸びすぎて盤を押し出さないよう上限を設ける。中身は下の
-				 * 高さメディアクエリで行数を減らして収める。 */
+				/* 画面の底に固定する。
+				 *
+				 * 盤の高さを `100vh` で決めると、URL バーを含む高さになり帯が
+				 * 画面外へ出る。JS で測っても、古い Chromium は `innerHeight` に
+				 * バーを含めて返すので当てにならない（Fire タブで3回外した）。
+				 * `position: fixed; bottom` は Android Chrome が「見えている底」に
+				 * 合わせて動かすので、高さの計算に依存しない。
+				 * 盤側は `--ticker-h` の分だけ下に余白を空ける（andon.js が実測）。 */
+				position: fixed;
+				left: 10px;
+				right: 10px;
+				bottom: 10px;
+				z-index: 4;
 				max-height: 34vh;
 				overflow: hidden;
 				display: grid;

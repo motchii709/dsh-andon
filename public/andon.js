@@ -126,6 +126,16 @@ function manualCompact() {
 		return null;
 	}
 }
+/* 固定した帯の高さを測って `--ticker-h` に入れる。
+ *
+ * 帯は `position: fixed` で画面の底に貼り付いているので、盤側はその分だけ
+ * 下に余白を空ける必要がある。高さはログの行数で変わるため、描画のたびに測る。 */
+function syncTicker() {
+	const ticker = document.querySelector('.ticker');
+	if (!ticker) return;
+	const h = Math.round(ticker.getBoundingClientRect().height);
+	if (h > 0) document.documentElement.style.setProperty('--ticker-h', h + 'px');
+}
 function fitContent() {
 	const board = refs.board;
 	if (!board) return;
@@ -145,6 +155,7 @@ function fitContent() {
 }
 
 function fitViewport() {
+	syncTicker();
 	const h = visibleHeight();
 	if (h > 0) document.documentElement.style.setProperty('--app-h', `${h}px`);
 	fitContent();
@@ -498,6 +509,7 @@ function render(state) {
 	}
 
 	document.body.dataset.down = '0';
+	syncTicker();
 	fitContent();
 	document.body.dataset.stale = '0';
 	connection.update();
