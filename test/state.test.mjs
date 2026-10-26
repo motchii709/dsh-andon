@@ -683,3 +683,28 @@ test('the andon client stays parseable on an old Silk (Fire tab)', async () => {
 		}
 	}
 });
+
+test('the board takes its height from its four edges, never from the viewport', async () => {
+	// `100dvh` is unknown before Chrome 108, so the declaration is dropped and
+	// the `100vh` fallback wins — and 100vh is the *largest* viewport, URL bar
+	// included. The board then grows past the visible area and the ticker plus
+	// the fullscreen button leave the screen. That was the reported 「下が切れる」,
+	// and it survived three attempts that measured innerHeight instead: this
+	// sheet is read after andon.html, so whatever the page set lost the cascade.
+	//
+	// The fix is to declare no height at all — `position: fixed` with four edges
+	// at 0 *is* the visible area — and this test keeps it that way.
+	for (const file of ['andon.html', 'md3ex.css']) {
+		const source = readFileSync(new URL(`../public/${file}`, import.meta.url), 'utf8');
+		const rule = /#board\s*\{([^}]*)\}/g;
+		let match = rule.exec(source);
+		while (match !== null) {
+			assert.ok(
+				!/(?:^|[;{\s])height\s*:/m.test(match[1]),
+				`${file} gives #board a height; the four edges must decide it ` +
+					'(a viewport-based height is what cut the ticker and the 全画面 button)',
+			);
+			match = rule.exec(source);
+		}
+	}
+});
