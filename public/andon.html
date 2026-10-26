@@ -31,21 +31,20 @@
 			}
 
 			#board {
-				/* 盤の箱は「見えている領域」そのもの。
+				/* 盤の箱は「いま見えている領域」そのもの。
 				 *
-				 * `100vh` はブラウザの URL バーを含んだ高さなので、バーが出ている
-				 * 間は盤が実画面より高くなり、下端（黒いチッカー）が画面外へ出る。
-				 * JS で visualViewport を測る案も試したが、端末によっては innerHeight
-				 * がバー込みの値を返し、焼け石に水だった。
-				 * `position: fixed` + `inset: 0` は描画されている箱に追従するので、
-				 * 高さを数値で当てにいかなくて済む。height は古い実装向けの控え。 */
+				 * 4辺を 0 で留めれば、箱の高さはブラウザが決める。ここに height を
+				 * 書くと下辺の指定が負ける（固定位置では top / height / bottom を
+				 * 同時に指定すると bottom が捨てられる）。
+				 *
+				 * 高さを数値で与えない理由: `100vh` は URL バーを含む最大の高さで、
+				 * `dvh` は Fire OS 5 の Silk（Chromium 80 未満）が解釈せず宣言ごと
+				 * 落ちる。どちらも「測って当てにいく」値で、実機で3回外した原因。 */
 				position: fixed;
 				top: 0;
 				right: 0;
 				bottom: 0;
 				left: 0;
-				height: 100vh;
-				height: var(--app-h, 100vh);
 				display: grid;
 				grid-template-columns: clamp(300px, 23vw, 452px) minmax(0, 1fr);
 				grid-template-rows: minmax(0, 1fr) auto;

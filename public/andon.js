@@ -80,18 +80,6 @@ if (refs.fs) {
 		refs.fs.hidden = true;
 	}
 }
-/* 実画面の高さを CSS 変数に入れる。
- *
- * `100vh` はブラウザの URL バーを含む高さなので、バーが出ている間は盤の下端
- * （黒いチッカーと全画面ボタン）が画面外に出る。Fire タブの Silk は `dvh` を
- * 解釈しないため、そのままでは下が切れて押せない。visualViewport があれば
- * それ（実際に見えている高さ）、無ければ innerHeight を使う。
- * 回転・バー伸縮・全画面の出入りで値が変わるので、resize のたびに入れ直す。 */
-function visibleHeight() {
-	const view = window.visualViewport;
-	return Math.round((view && view.height) || window.innerHeight || 0);
-}
-
 /* 盤が画面からはみ出していたら、中身を段階的に詰める。
  *
  * 高さの報告値が端末によって嘘をつく（URL バー込みで返す）ことがあり、
@@ -145,19 +133,18 @@ function fitContent() {
 		return;
 	}
 	document.body.removeAttribute('data-compact');
+	/* 盤の外側ではなく「盤の中」が溢れているかを見る。盤は4辺で画面に
+	 * 留まっているので、はみ出しは必ず中身の側で起きる。ブラウザが申告する
+	 * 高さ（innerHeight / visualViewport / dvh）は端末によって嘘をつくため、
+	 * 比較に使わない。 */
 	for (let step = 1; step <= 3; step += 1) {
-		const box = board.getBoundingClientRect();
-		const visible = visibleHeight();
-		if (visible <= 0) return;
-		if (Math.round(box.bottom) <= visible + 1) return;
+		if (board.scrollHeight <= board.clientHeight + 1) return;
 		document.body.dataset.compact = String(step);
 	}
 }
 
 function fitViewport() {
 	syncTicker();
-	const h = visibleHeight();
-	if (h > 0) document.documentElement.style.setProperty('--app-h', `${h}px`);
 	fitContent();
 }
 
@@ -182,7 +169,6 @@ function showDiag() {
 			`boardBottom=${Math.round(box.bottom)}`,
 			`ticker=${Math.round(tick.height)}`,
 			`tickerBottom=${Math.round(tick.bottom)}`,
-			`app-h=${getComputedStyle(document.documentElement).getPropertyValue('--app-h').trim() || 'none'}`,
 		].join('  ');
 	};
 	const box = document.createElement('div');
