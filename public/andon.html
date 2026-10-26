@@ -113,7 +113,7 @@
 			}
 
 			.sr-l {
-				font-size: clamp(16px, 1.5vw, 33px);
+				font-size: clamp(18px, 1.9vw, 40px);
 				letter-spacing: 0.06em;
 				overflow: hidden;
 				text-overflow: ellipsis;
@@ -125,7 +125,7 @@
 			 * equally urgent, which is how a board hides its real alarm. The
 			 * labels stay on paper, so the list is still a readable list. */
 			.sr-v {
-				font-size: clamp(30px, 3vw, 62px);
+				font-size: clamp(34px, 4.4vw, 92px);
 				line-height: 1;
 				font-weight: 600;
 				text-align: right;
@@ -480,11 +480,14 @@
 				.sr-i {
 					display: none;
 				}
+				/* 8局 → 4局に減ったので1マスが広い。値は一段大きくする。
+				 * 狭い画面は据置タブレット（2〜3m）なので、ここは「読める」側に振る。 */
 				.sr-l {
-					font-size: clamp(10px, 1.6vw, 15px);
+					font-size: clamp(13px, 2.1vw, 21px);
+					letter-spacing: 0.04em;
 				}
 				.sr-v {
-					font-size: clamp(16px, 2.6vw, 26px);
+					font-size: clamp(24px, 4vw, 44px);
 				}
 				.ticker {
 					grid-row: 3;
@@ -562,31 +565,15 @@
 					><span class="sr-v num live-value">—</span>
 				</div>
 				<div class="sr" id="st-running" data-sev="off">
-					<span class="sr-i num">2</span><span class="sr-l">実行中</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-				<div class="sr" id="st-sessions" data-sev="off">
-					<span class="sr-i num">3</span><span class="sr-l">セッション</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-				<div class="sr" id="st-jobs" data-sev="off">
-					<span class="sr-i num">4</span><span class="sr-l">ジョブ</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-				<div class="sr" id="st-subagents" data-sev="off">
-					<span class="sr-i num">5</span><span class="sr-l">サブ</span
-					><span class="sr-v num live-value">—</span>
-				</div>
-				<div class="sr" id="st-goals" data-sev="off">
-					<span class="sr-i num">6</span><span class="sr-l">目標</span
+					<span class="sr-i num">2</span><span class="sr-l">作業中</span
 					><span class="sr-v num live-value">—</span>
 				</div>
 				<div class="sr" id="st-context" data-sev="off">
-					<span class="sr-i num">7</span><span class="sr-l">文脈</span
+					<span class="sr-i num">3</span><span class="sr-l">記憶</span
 					><span class="sr-v num live-value">—</span>
 				</div>
 				<div class="sr" id="st-errors" data-sev="off">
-					<span class="sr-i num">8</span><span class="sr-l">異常計</span
+					<span class="sr-i num">4</span><span class="sr-l">異常</span
 					><span class="sr-v num live-value">—</span>
 				</div>
 			</aside>

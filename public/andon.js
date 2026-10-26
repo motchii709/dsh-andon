@@ -33,16 +33,7 @@ import {
 
 const $ = (id) => document.getElementById(id);
 
-const STATION_IDS = [
-	'needs-you',
-	'running',
-	'sessions',
-	'jobs',
-	'subagents',
-	'goals',
-	'context',
-	'errors',
-];
+const STATION_IDS = ['needs-you', 'running', 'context', 'errors'];
 
 const refs = {
 	board: $('board'),
@@ -202,7 +193,7 @@ const STATUS_WORD = { alert: '要対応', warn: '注意', ok: '正常' };
 function statusSubline(state) {
 	const counts = state.counts || {};
 	if (state.status === 'ok') {
-		return `異常なし · 実行中 ${counts.agentsRunning || 0} · セッション ${counts.liveSessions || 0}`;
+		return `異常なし · 作業中 ${counts.agentsRunning || 0} · 会話 ${counts.liveSessions || 0}`;
 	}
 	const bits = [];
 	if (counts.pendingApprovals) bits.push(`承認待ち ${counts.pendingApprovals}件`);
@@ -257,65 +248,68 @@ function calmLine(state) {
 	const c = state.counts || {};
 	const running = typeof c.running === 'number' ? c.running : 0;
 	const sessions = typeof c.sessions === 'number' ? c.sessions : 0;
-	return `異常なし · 実行中 ${running} · セッション ${sessions}`;
+	return `異常なし · 作業中 ${running} · 会話 ${sessions}`;
 }
-/** レール8局を、v2 の細い形（counts）から組み立てる。
+/** レール4局を、v2 の細い形（counts）から組み立てる。
  *
- *  サーバの stations と同じ定義・同じ並び・同じ severity にする（画面と
- *  数字が食い違うと「どちらが本当か」を読み手に考えさせる）。足りない値は
- *  0 ではなく「—」を出す: 0 は「無い」という主張になる。 */
+ *  8局あったが、常時 0 で、0 のときに何も起きない数字（セッション・ジョブ・
+ *  サブ・目標）は落とした。意味の分からない数字が並ぶ板は、読む前に
+ *  「読まなくていい」と判断される。残したのは4つだけ:
+ *
+ *    要対応  人が動く番（承認待ち・入力待ち）
+ *    作業中  DSH がいま動かしている数
+ *    記憶    会話の記憶がどれだけ埋まっているか（%）
+ *    異常    壊れている数（失敗・起動失敗・診断・止まった目標）
+ *
+ *  サーバは counts を今も全部返す（API は変えない）。戻したくなったら
+ *  ここに1行足して HTML に .sr を1つ戻すだけでよい。 */
 function buildStations(state) {
 	const c = state.counts || {};
 	const n = (key) => (typeof c[key] === 'number' ? c[key] : null);
-	const dash = (v) => (v === null ? '—' : String(v));
-	const jobsFailed = n('jobsFailed');
-	const goalsBlocked = n('goalsBlocked');
-	const goalsPaused = n('goalsPaused');
+	const sum = (keys) => {
+		let total = 0;
+		let known = false;
+		for (const key of keys) {
+			const v = n(key);
+			if (v !== null) {
+				total += v;
+				known = true;
+			}
+		}
+		return known ? total : null;
+	};
 	const contextMax = n('contextMax');
-	const errors = n('errors');
+	// errors は失敗ジョブ・起動失敗・診断の合計。目標の停止は別枠なので足す。
+	const trouble = sum(['errors', 'goalsBlocked', 'goalsPaused']);
+	const parts = [];
+	if (n('jobsFailed')) parts.push(`失敗ジョブ ${n('jobsFailed')}`);
+	if (n('goalsBlocked')) parts.push(`目標遮断 ${n('goalsBlocked')}`);
+	if (n('goalsPaused')) parts.push(`目標休止 ${n('goalsPaused')}`);
 	return [
 		{
 			id: 'needs-you',
 			label: '要対応',
 			value: c.needsYou || 0,
 			suffix: '',
-			hint: c.needsYou ? `承認・入力待ち ${c.needsYou}` : '—',
+			hint: c.needsYou ? `承認・入力待ち ${c.needsYou}` : '人が動く番ではない',
 			severity: c.needsYou > 0 ? 'alert' : 'ok',
 		},
-		{ id: 'running', label: '実行中', value: c.running || 0, suffix: '', hint: 'エージェント', severity: 'ok' },
-		{ id: 'sessions', label: 'セッション', value: c.sessions || 0, suffix: '', hint: '生存のみ', severity: 'ok' },
-		{
-			id: 'jobs',
-			label: 'ジョブ',
-			value: jobsFailed === null ? '—' : jobsFailed,
-			suffix: '',
-			hint: `稼働 ${dash(n('jobsRunning'))} / 失敗 ${dash(jobsFailed)}`,
-			severity: jobsFailed > 0 ? 'alert' : 'ok',
-		},
-		{ id: 'subagents', label: 'サブ', value: dash(n('subagents')), suffix: '', hint: '—', severity: 'ok' },
-		{
-			id: 'goals',
-			label: '目標',
-			value: goalsBlocked === null && goalsPaused === null ? '—' : (goalsBlocked || 0) + (goalsPaused || 0),
-			suffix: '',
-			hint: `遮断 ${dash(goalsBlocked)} / 休止 ${dash(goalsPaused)}`,
-			severity: goalsBlocked > 0 || goalsPaused > 0 ? 'warn' : 'ok',
-		},
+		{ id: 'running', label: '作業中', value: c.running || 0, suffix: '', hint: '動いているエージェント', severity: 'ok' },
 		{
 			id: 'context',
-			label: '文脈',
+			label: '記憶',
 			value: contextMax === null ? '—' : contextMax,
 			suffix: contextMax === null ? '' : '%',
-			hint: '最大',
+			hint: '会話の記憶の埋まり具合',
 			severity: contextMax >= 90 ? 'alert' : contextMax >= 75 ? 'warn' : 'ok',
 		},
 		{
 			id: 'errors',
 			label: '異常',
-			value: errors === null ? '—' : errors,
+			value: trouble === null ? '—' : trouble,
 			suffix: '',
-			hint: '失敗・診断',
-			severity: errors > 0 ? 'alert' : 'ok',
+			hint: parts.length ? parts.join(' / ') : '壊れているものは無い',
+			severity: trouble > 0 ? 'alert' : 'ok',
 		},
 	];
 }
