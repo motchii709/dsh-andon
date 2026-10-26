@@ -169,6 +169,10 @@ function showDiag() {
 			`boardBottom=${Math.round(box.bottom)}`,
 			`ticker=${Math.round(tick.height)}`,
 			`tickerBottom=${Math.round(tick.bottom)}`,
+			// レールの点灯が実機で消えることがある（色の宣言が環境で落ちる）。
+			// 状態と実際に塗られた色を並べて出す: 「点いているつもり」を防ぐ。
+			`ctx=${document.querySelector('#st-context') ? document.querySelector('#st-context').dataset.sev : '?'}`,
+			`ctxbg=${document.querySelector('#st-context .sr-v') ? getComputedStyle(document.querySelector('#st-context .sr-v')).backgroundColor : '?'}`,
 		].join('  ');
 	};
 	const box = document.createElement('div');
@@ -345,6 +349,11 @@ function renderStations(stations, v2counts) {
 		const sev =
 			station.severity === 'alert' || station.severity === 'warn' ? station.severity : 'ok';
 		if (row.el.dataset.sev !== sev) row.el.dataset.sev = sev;
+		// 0 と「動いている数」を同じ濃さで並べると、8工程が全部同じ強さで
+		// 目に入る（盤の原則は「正常は静かに」）。色ではなく濃さと太さで
+		// 分けるための印。寸法は変えない（値が 0↔1 で行が跳ねると読めない）。
+		const empty = Number(value) === 0 ? '1' : '0';
+		if (row.el.dataset.zero !== empty) row.el.dataset.zero = empty;
 		setText(row.value, `${value}${station.suffix || ''}`);
 		// The breakdown stays a tooltip: the rail is a glance, and the field
 		// sub-line already states the categories in words.

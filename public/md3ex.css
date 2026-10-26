@@ -170,22 +170,23 @@
 	justify-content: flex-end;
 }
 
+/* 92% warn + 0% black は warn そのもの。color-mix は何も足していないのに、
+ * これを解釈できない環境（Fire 7 の Chrome 95）では宣言ごと落ちて地が消え、
+ * 「点いている工程」がただの太字になっていた（実機の ctxbg=rgba(0,0,0,0)）。
+ * 段を作る必要が出るまで、素の色だけにする。 */
 .sr[data-sev="warn"] .sr-v {
-	background: var(--warn);             /* color-mix 非対応環境向け */
-	background: color-mix(in oklab, var(--warn) 92%, black 0%);
+	background: var(--warn);
 }
 
 .sr[data-sev="alert"] .sr-v {
-	background: var(--alert);            /* color-mix 非対応環境向け */
-	background: color-mix(in oklab, var(--alert) 92%, black 0%);
+	background: var(--alert);
 }
 
 /* A cleared station is a tonal chip on the paper, not bare text: the row still
  * has to look like a control at a glance. */
 .sr[data-sev="ok"] .sr-v,
 .sr[data-sev="off"] .sr-v {
-	background: rgba(0, 0, 0, 0.06);       /* color-mix 非対応環境向け */
-	background: color-mix(in oklab, black 8%, transparent);
+	background: rgba(0, 0, 0, 0.06);
 	color: rgba(0, 0, 0, 0.62);
 }
 
@@ -644,4 +645,68 @@ body {
 			font-size: 20px;
 		}
 	}
+}
+
+/* ── 4. 読み分け（レールと帯の強弱）─────────────────────────────────
+ *
+ * 盤の原則は「正常は静かに、異常だけ目立たせる」。ところが 8工程の値は
+ * どれも同じ濃さで並んでいたので、0 と 23 が同じ強さで目に入っていた。
+ * 数を3段に分ける: 呼んでいる（色面のセル）> 動いている（黒）> 空（灰）。
+ *
+ * 寸法は動かさない。工程の並びと行の高さは計器の並びなので、値が 0 と
+ * 1 を行き来するたびに行が跳ねる板は読めない。灰色は 0.5 だと地 #e9edf0
+ * に対して 4.0:1 で本文の下限に届かないため 0.58 にする。
+ */
+.rail .sr[data-zero='1']:not([data-sev='warn']):not([data-sev='alert']) .sr-v {
+	color: rgba(0, 0, 0, 0.58);
+	font-weight: 400;
+}
+
+.rail .sr[data-zero='0']:not([data-sev='warn']):not([data-sev='alert']) .sr-v {
+	color: #0c0e10;
+	font-weight: 700;
+}
+
+/* 番号は位置の目印でしかない。ラベルと値より前に出ない濃さに落とす。 */
+.rail .sr-i {
+	color: rgba(0, 0, 0, 0.34);
+}
+
+/* 帯の時刻は列にする。行ごとに文字数が違うと右端がギザギザになり、
+ * 時刻を目で追えない。ログの最低条件はここ。5.2ch は 24時間表記の
+ * 5文字ぶん（23:59 + 余白）。 */
+.ticker .trow {
+	grid-template-columns: 14px minmax(0, 1fr) 5.2ch;
+}
+
+.ticker .ttime {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+/* 新しい行ほど濃い。上から下へ薄くなることで「いつ」が読める。
+ * 同じ濃さの3行は、どれが最新か目で探すことになる。 */
+.ticker .tick-rows > .trow:nth-child(1) {
+	opacity: 1;
+}
+.ticker .tick-rows > .trow:nth-child(2) {
+	opacity: 0.78;
+}
+.ticker .tick-rows > .trow:nth-child(3) {
+	opacity: 0.6;
+}
+
+/* 時計は盤の主役ではない。読む順は 色 → 状態語 → 件数 → 呼ばれた工程 →
+ * 時刻。帯で一番大きい要素（最大52px）だったのを一段落とす。 */
+.ticker .clock {
+	font-size: clamp(20px, 2vw, 38px);
+	font-variant-numeric: tabular-nums;
+}
+
+/* LIVE は線が生きていることの表示。点だけだと 3m で見落とすので、
+ * 枠を与えて「切れていない」が読める形にする。 */
+.ticker .conn {
+	padding: 2px 10px 2px 8px;
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	border-radius: 999px;
 }
