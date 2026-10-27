@@ -47,12 +47,10 @@
 				left: 0;
 				display: grid;
 				grid-template-columns: clamp(300px, 23vw, 452px) minmax(0, 1fr);
-				grid-template-rows: minmax(0, 1fr) auto;
+				/* チッカーを畳んだので行は1本。色面が盤の残り全部を使う。 */
+				grid-template-rows: minmax(0, 1fr);
 				gap: 10px;
 				padding: 10px;
-				/* 画面の底に固定した帯のぶん、盤の下端を空ける。
-				 * `--ticker-h` は andon.js が実測して入れる（帯の高さは行数で変わる）。 */
-				padding-bottom: calc(var(--ticker-h, 120px) + 20px);
 				background: #08090a;
 				box-sizing: border-box;
 			}
@@ -234,14 +232,12 @@
 
 			/* 問題のセッション名。3m で読める大きさを保ちつつ、状態語より一段落とす。
 			 * 3件まで出し、あふれは「他N件」。 */
-			.who {
-				margin: clamp(8px, 1.4vh, 20px) 0 0;
+			.sessions {
+				margin: clamp(6px, 1.2vh, 16px) 0 0;
 				padding: 0;
 				list-style: none;
-				display: flex;
-				flex-direction: column;
-				gap: clamp(4px, 0.9vh, 12px);
-				max-width: 92%;
+				min-height: 0;
+				overflow: hidden;
 			}
 
 			.who li {
@@ -260,10 +256,7 @@
 				opacity: 0.7;
 			}
 
-			.who .who-why {
-				font-weight: 400;
-				opacity: 0.72;
-			}
+			.who 
 			#status-sub {
 				margin: 0;
 				/* The line that says WHY the board is lit. It carries the same
@@ -283,32 +276,7 @@
 			}
 
 			/* ── ticker: what called, and the clock ─────────────────────── */
-			.ticker {
-				/* 画面の底に固定する。
-				 *
-				 * 盤の高さを `100vh` で決めると、URL バーを含む高さになり帯が
-				 * 画面外へ出る。JS で測っても、古い Chromium は `innerHeight` に
-				 * バーを含めて返すので当てにならない（Fire タブで3回外した）。
-				 * `position: fixed; bottom` は Android Chrome が「見えている底」に
-				 * 合わせて動かすので、高さの計算に依存しない。
-				 * 盤側は `--ticker-h` の分だけ下に余白を空ける（andon.js が実測）。 */
-				position: fixed;
-				left: 10px;
-				right: 10px;
-				bottom: 10px;
-				z-index: 4;
-				max-height: 34vh;
-				overflow: hidden;
-				display: grid;
-				grid-template-columns: minmax(0, 1fr) auto;
-				align-items: center;
-				gap: clamp(16px, 2vw, 40px);
-				padding: clamp(8px, 1.2vh, 16px) clamp(14px, 1.6vw, 26px);
-				background: #0c0e10;
-				border: 2px solid #000;
-				color: var(--ink);
-				min-height: 0;
-			}
+			
 
 			.tick-rows {
 				display: flex;
@@ -458,11 +426,12 @@
 			@media (max-width: 1100px), (max-height: 620px) {
 				#board {
 					grid-template-columns: minmax(0, 1fr);
-					grid-template-rows: minmax(0, 1fr) auto auto;
+					grid-template-rows: minmax(0, 1fr) auto;
 				}
 				.rail {
 					flex-direction: row;
 					grid-row: 2;
+					
 					border-top: 2px solid #000;
 				}
 				.sr {
@@ -489,9 +458,7 @@
 				.sr-v {
 					font-size: clamp(24px, 4vw, 44px);
 				}
-				.ticker {
-					grid-row: 3;
-				}
+				
 				#status-word {
 					font-size: clamp(48px, 11vw, 110px);
 				}
@@ -512,9 +479,7 @@
 				.trow:nth-child(2) {
 					display: none;
 				}
-				.ticker {
-					max-height: 26vh;
-				}
+				
 			}
 			/* はみ出しの自動縮小（andon.js の fitContent が付ける）。
 			 * 1: ログの3行目を落とす / 2: 2行目も落として余白を詰める /
@@ -539,13 +504,11 @@
 			}
 
 			body[data-compact="3"] #status-sub,
-			body[data-compact="3"] .who li {
+			body[data-compact="3"] .sx {
 				font-size: clamp(14px, 1.6vw, 28px);
 			}
 
-			body[data-compact="3"] .ticker {
-				max-height: 24vh;
-			}		</style>
+			body[data-compact="3"] 		</style>
 		<!-- Material 3 Expressive layer, loaded LAST on purpose: it overrides
 		     the page rules above (shape scale, tonal surfaces, the phone
 		     breakpoint). Loaded before <style>, its phone rules lost to the
@@ -591,25 +554,26 @@
 					</div>
 				</div>
 				<p id="status-sub">読み込み中</p>
-				<!-- どのセッションが問題か。色と状態語だけでは「要対応」しか
-				     分からず、開くべきセッションを探す手間が残る。 -->
-				<ul id="status-who" class="who" aria-label="問題のセッション"></ul>
+				<!-- 動いているセッション全部と、それぞれの状態（正常/権限/質問/停止）。
+     色は点と文字で持たせる: 緑=正常 黄=権限・質問 赤=停止。 -->
+<ul id="status-sessions" class="sessions" aria-label="セッションの状態"></ul>
 				<!-- 全画面の切替。黒い帯の中に置くと、ブラウザの URL バーで帯が
 				     切れたときに押せなくなる（Fire タブで実際に起きた）。色面は
 				     常に見えているので、その右下に固定する。目立たせない。 -->
+				<!-- 旧チッカーの生存表示と時計。チッカーを畳んだので色面の
+				     右下（⛶ の隣）へ移した。消すと「止まってるのか壊れてるのか」が
+				     分からなくなるため、この2つだけは必ず残す。 -->
+				<div class="field-meta">
+<div class="conn" id="conn" data-state="ok">
+						<i class="conn-dot"></i><span data-role="conn-label">LIVE</span>
+					</div>
+<div class="clock num" id="clock">--:--:--</div>
+</div>
+<p class="notes" id="notes" hidden></p>
 				<button class="fs" id="fs" type="button" aria-label="全画面の切替" title="全画面（F）">⛶</button>
 			</section>
 
-			<footer class="ticker">
-				<div class="tick-rows" id="alert-list"></div>
-				<div class="tick-meta">
-					<div class="conn" id="conn" data-state="ok">
-						<i class="conn-dot"></i><span data-role="conn-label">LIVE</span>
-					</div>
-					<div class="clock num" id="clock">--:--:--</div>
-				</div>
-				<p class="notes" id="notes" hidden></p>
-			</footer>
+
 		</main>
 
 		<script type="module" src="./assets/andon.js"></script>

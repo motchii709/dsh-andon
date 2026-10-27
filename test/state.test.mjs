@@ -712,3 +712,25 @@ test('the board takes its height from its four edges, never from the viewport', 
 		}
 	}
 });
+
+/* ── 盤の状態語（正常/権限/質問/停止）────────────────────────────── */
+
+test('label: 承認待ちは権限、入力待ちは質問、エラー停止は停止', async () => {
+	const { collector } = await collectorFor();
+	const snap = collector.snapshot();
+	const seen = new Set((snap.sessions || []).map((row) => row.label));
+	assert.ok(seen.size > 0, 'label が1つも付いていない');
+	for (const label of seen) {
+		assert.ok(['normal', 'approval', 'question', 'stopped'].indexOf(label) > -1, `未知の label: ${label}`);
+	}
+	assert.ok(['normal', 'approval', 'question', 'stopped'].indexOf(snap.label) > -1, `未知の overall label: ${snap.label}`);
+});
+
+test('label: 承認待ちのセッションは approval、理由に承認が入る', async () => {
+	const { collector } = await collectorFor();
+	const snap = collector.snapshot();
+	const approval = (snap.sessions || []).filter((row) => /承認/.test(row.reason || ''));
+	for (const row of approval) assert.equal(row.label, 'approval', `${row.name}: ${row.reason}`);
+	const question = (snap.sessions || []).filter((row) => /入力待ち/.test(row.reason || ''));
+	for (const row of question) assert.equal(row.label, 'question', `${row.name}: ${row.reason}`);
+});

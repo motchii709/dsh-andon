@@ -1,13 +1,13 @@
 /* dsh-andon / andon.js — the wall board's renderer.
  *
  * Contract: DESIGN.md §3.1 and §5. The whole shell (rail labels, field,
- * ticker) is already in andon.html; this file only patches values in and
+ * sessions list) is already in andon.html; this file only patches values in and
  * reuses nodes, so nothing flickers on a 2-second poll.
  *
  * Three zones, three jobs:
  *   rail   — the eight stations, numbered; a calling station lights solid
  *   field  — the colour (status) and the two numbers you read across a room
- *   ticker — what called, and the clock
+ *   sessions — every live session and its state (正常/権限/質問/停止)
  *
  * The field colour is set from state.status alone: green running, yellow
  * attention, red stopped. That single background is the primary alarm, which
@@ -33,20 +33,26 @@ import {
 
 const $ = (id) => document.getElementById(id);
 
+/** 値が変わったときだけ書き込む（2秒ポーリングで毎回 DOM を触らない）。 */
+function setText(node, text) {
+	if (!node) return;
+	const value = text === null || text === undefined ? '—' : String(text);
+	if (node.textContent !== value) node.textContent = value;
+}
+
 const STATION_IDS = ['needs-you', 'running', 'context', 'errors'];
 
 const refs = {
 	board: $('board'),
 	statusWord: $('status-word'),
 	statusSub: $('status-sub'),
-	statusWho: $('status-who'),
+	sessions: $('status-sessions'),
 	fs: $('fs'),
 	counter: $('counter'),
 	alertCount: $('alert-count'),
 	host: $('host'),
 	clock: $('clock'),
 	conn: $('conn'),
-	alertList: $('alert-list'),
 	notes: $('notes'),
 	rows: {},
 };
@@ -105,16 +111,6 @@ function manualCompact() {
 		return null;
 	}
 }
-/* 固定した帯の高さを測って `--ticker-h` に入れる。
- *
- * 帯は `position: fixed` で画面の底に貼り付いているので、盤側はその分だけ
- * 下に余白を空ける必要がある。高さはログの行数で変わるため、描画のたびに測る。 */
-function syncTicker() {
-	const ticker = document.querySelector('.ticker');
-	if (!ticker) return;
-	const h = Math.round(ticker.getBoundingClientRect().height);
-	if (h > 0) document.documentElement.style.setProperty('--ticker-h', h + 'px');
-}
 function fitContent() {
 	const board = refs.board;
 	if (!board) return;
@@ -135,7 +131,6 @@ function fitContent() {
 }
 
 function fitViewport() {
-	syncTicker();
 	fitContent();
 }
 
@@ -148,18 +143,14 @@ function showDiag() {
 	if (String(location.search).indexOf('diag=1') === -1) return;
 	const view = window.visualViewport;
 	const board = refs.board;
-	const ticker = document.querySelector('.ticker');
 	const line = () => {
 		const box = board ? board.getBoundingClientRect() : { height: 0, bottom: 0 };
-		const tick = ticker ? ticker.getBoundingClientRect() : { height: 0, bottom: 0 };
-		return [
+			return [
 			`inner=${window.innerHeight}`,
 			`vv=${view && view.height ? Math.round(view.height) : 'none'}`,
 			`doc=${document.documentElement.clientHeight}`,
 			`board=${Math.round(box.height)}`,
 			`boardBottom=${Math.round(box.bottom)}`,
-			`ticker=${Math.round(tick.height)}`,
-			`tickerBottom=${Math.round(tick.bottom)}`,
 			// レールの点灯が実機で消えることがある（色の宣言が環境で落ちる）。
 			// 状態と実際に塗られた色を並べて出す: 「点いているつもり」を防ぐ。
 			`ctx=${document.querySelector('#st-context') ? document.querySelector('#st-context').dataset.sev : '?'}`,
@@ -185,65 +176,7 @@ if (window.visualViewport) window.visualViewport.addEventListener('resize', fitV
 const connection = createConnection(refs.conn, { staleAfterMs: 6000 });
 startClock(refs.clock);
 
-const STATUS_WORD = { alert: '要対応', warn: '注意', ok: '正常' };
 
-/** One line telling the operator what to do. Counts, not a sentence: a number
- *  is something you can act on. This line and the lit rail rows always agree,
- *  because both come from the same counts. */
-function statusSubline(state) {
-	const counts = state.counts || {};
-	if (state.status === 'ok') {
-		return `異常なし · 作業中 ${counts.agentsRunning || 0} · 会話 ${counts.liveSessions || 0}`;
-	}
-	const bits = [];
-	if (counts.pendingApprovals) bits.push(`承認待ち ${counts.pendingApprovals}件`);
-	if (counts.jobsFailed) bits.push(`ジョブ失敗 ${counts.jobsFailed}件`);
-	if (counts.goalsBlocked) bits.push(`目標遮断 ${counts.goalsBlocked}件`);
-	if (counts.goalsPaused) bits.push(`目標休止 ${counts.goalsPaused}件`);
-	if (counts.subagentDiagnostics) bits.push(`診断不能 ${counts.subagentDiagnostics}件`);
-	if (counts.startupFailures) bits.push(`起動失敗 ${counts.startupFailures}件`);
-	if (!bits.length) {
-		return state.status === 'alert' ? '対応が必要な項目があります' : '注意項目があります';
-	}
-	return bits.join(' · ');
-}
-
-/* ── the rail ────────────────────────────────────────────────────────────── */
-
-function setText(node, text) {
-	const value = text === null || text === undefined ? '—' : String(text);
-	if (node.textContent !== value) node.textContent = value;
-}
-
-/** どのセッションが問題か。色と状態語だけでは「要対応」しか伝わらず、
- *  開くべきセッションを探す手間が残る（実機を見た指摘）。
- *
- *  正常のときは空。名前は 40 文字で切り、3件まで出して残りは「他N件」。 */
-function renderWho(state) {
-	const host = refs.statusWho;
-	if (!host) return;
-	const list = (state.sessions || [])
-		.filter((s) => s.state === 'needs-you' || s.state === 'alarm')
-		.sort((a, b) => (a.state === 'alarm' ? -1 : 0) - (b.state === 'alarm' ? -1 : 0) || (a.since || 0) - (b.since || 0));
-	clear(host);
-	if (!list.length || state.overall === 'normal') {
-		host.hidden = true;
-		return;
-	}
-	host.hidden = false;
-	for (const session of list.slice(0, 3)) {
-		const li = h('li');
-		li.appendChild(h('span', { text: clampText(session.name || session.id || '', 40) }));
-		if (session.reason) {
-			li.appendChild(h('span', { class: 'who-why', text: `  ${clampText(session.reason, 24)}` }));
-		}
-		host.appendChild(li);
-	}
-	if (list.length > 3) {
-		host.appendChild(h('li', { class: 'who-why', text: `他${list.length - 3}件` }));
-	}
-}
-/** 静かなときの一行。数字だけを並べる（形容詞は書かない）。 */
 function calmLine(state) {
 	const c = state.counts || {};
 	const running = typeof c.running === 'number' ? c.running : 0;
@@ -314,21 +247,7 @@ function buildStations(state) {
 	];
 }
 
-/** v2 の log[{at,session,severity,text}] を、v1 の activity 形に寄せる。
- *
- *  正常のときは平穏な行だけ流す。緑の全面に赤い「承認待ち」が並ぶと、
- *  盤が「正常」と「要対応」を同時に主張していることになり、どちらを信じるか
- *  読み手に考えさせる。警報色の行は、警報が出ているときだけ出す。 */
-function logAsActivity(log, overall) {
-	const calm = overall === 'normal';
-	return (log || [])
-		.filter((line) => !calm || line.severity === 'ok')
-		.map((line) => ({
-			at: line.at,
-			severity: line.severity,
-			text: line.session ? `${line.session}: ${line.text}` : line.text,
-		}));
-}
+
 function renderStations(stations, v2counts) {
 	// v1 の「要対応」は承認待ちしか数えない。v2 の needsYou は入力待ちも含むので、
 	// 大表示（要対応 n件）とレールの数字が食い違う。盤の数字同士が矛盾すると
@@ -355,84 +274,6 @@ function renderStations(stations, v2counts) {
 	}
 }
 
-/* ── the ticker ──────────────────────────────────────────────────────────── */
-
-const tickRows = new Map();
-
-function tickRow(id) {
-	let entry = tickRows.get(id);
-	if (entry) return entry;
-	const dot = h('span', { class: 'tdot' });
-	const text = h('span', { class: 'ttext' });
-	const time = h('span', { class: 'ttime num' });
-	const el = h('div', { class: 'trow' }, dot, text, time);
-	entry = { el, dot, text, time };
-	tickRows.set(id, entry);
-	return entry;
-}
-
-/** Calls first. The ticker is the board's answer to "which one called?", so a
- *  live alarm always outranks the log; only when nothing is calling does it
- *  fall back to the most recent activity. */
-function renderTicker(alerts, activity) {
-	const live = new Set();
-	const lines = [];
-
-	for (const alert of alerts.slice(0, 3)) {
-		lines.push({
-			id: `a:${alert.id}`,
-			sev: alert.severity === 'alert' ? 'alert' : 'warn',
-			text: clampText(alert.title, 90),
-			time: alert.since ? fmtClockShort(alert.since) : '',
-		});
-	}
-	if (!lines.length) {
-		for (const item of activity.slice(0, 3)) {
-			// The collector folds repeats into `count`; print it as ×N so three
-			// turns of the same event read as one counted line instead of three
-			// rows that all say 応答 and distinguish nothing.
-			const repeat = Number(item.count) > 1 ? ` ×${item.count}` : '';
-			lines.push({
-				id: `l:${item.at}:${lines.length}`,
-				sev: item.severity === 'alert' || item.severity === 'warn' ? item.severity : 'ok',
-				text: clampText(item.text + repeat, 90),
-				time: fmtClockShort(item.at),
-			});
-		}
-	}
-
-	clear(refs.alertList);
-	if (!lines.length) {
-		refs.alertList.appendChild(
-			h(
-				'div',
-				{ class: 'trow', dataset: { sev: 'ok' } },
-				h('span', { class: 'tdot' }),
-				h('span', { class: 'ttext', text: '動きなし' }),
-			),
-		);
-	} else {
-		for (const line of lines) {
-			live.add(line.id);
-			const row = tickRow(line.id);
-			row.el.dataset.sev = line.sev;
-			setText(row.text, line.text);
-			setText(row.time, line.time);
-			// Re-appending an existing node MOVES it; it is not rebuilt.
-			refs.alertList.appendChild(row.el);
-		}
-		if (alerts.length > lines.length) {
-			refs.alertList.appendChild(
-				h('p', { class: 'more', text: `ほか ${alerts.length - lines.length}件` }),
-			);
-		}
-	}
-
-	for (const id of tickRows.keys()) {
-		if (!live.has(id)) tickRows.delete(id);
-	}
-}
-
 /* ── render ──────────────────────────────────────────────────────────────── */
 
 let lastGoodAt = null;
@@ -449,18 +290,139 @@ const OVERALL_TO_STATUS = {
 	'needs-you': 'alert',
 	alarm: 'alert',
 };
-const OVERALL_TO_WORD = {
+/** 盤に出す4語。サーバの `label` が正（CONTRACT-v2 §1 の判定とは別軸）。
+ *  注意（watch）という語は持たない: 語を増やすと「どれを先にやるか」を
+ *  読み手に考えさせる。無反応も文脈逼迫も「正常」に丸め、数字と理由だけ残す。 */
+const LABEL_WORD = {
 	normal: '正常',
-	watch: '注意',
-	'needs-you': '要対応',
-	alarm: '異常',
+	approval: '権限',
+	question: '質問',
+	stopped: '停止',
 };
+/** 語に対応する盤の色（3色しかない: 緑/黄/赤）。質問も黄 — どちらも
+ *  「人が答えるまで進まない」同じ種類の待ちなので、色を分ける理由がない。 */
+const LABEL_COLOR = {
+	normal: 'ok',
+	approval: 'warn',
+	question: 'warn',
+	stopped: 'alert',
+};
+
+/** 動いているセッションを全部出す。状態は4語（正常/権限/質問/停止）で色分け、
+ *  待ちと停止には「いつから」を添える。
+ *
+ *  なぜ全部か: 盤の仕事は「どこが詰まっているか」ではなく「いま何がどう動いて
+ *  いるか」を見せること。問題の3件だけ出すと、残りが止まっているのか
+ *  動いているのか分からない。並びは 停止→権限→質問→正常（人が動く順）。 */
+const SESSION_ORDER = { stopped: 0, approval: 1, question: 2, normal: 3 };
+const SESSION_MAX = 8;
+
+function elapsedJa(ms) {
+	const min = Math.floor(ms / 60000);
+	if (min < 1) return 'たった今';
+	if (min < 60) return `${min}分前から`;
+	const hours = Math.floor(min / 60);
+	if (hours < 24) return `${hours}時間前から`;
+	const d = new Date(ms);
+	const mm = d.getMinutes() < 10 ? `0${d.getMinutes()}` : String(d.getMinutes());
+	return `${d.getHours()}:${mm}から`;
+}
+
+/** 待ちの古さ。3分未満は地味、10分超は赤（文字色だけ。面は塗らない）。 */
+function waitHeat(label, ageMs) {
+	if (label !== 'approval' && label !== 'question') return 'none';
+	if (ageMs >= 600000) return 'hot';
+	if (ageMs >= 180000) return 'warm';
+	return 'none';
+}
+
+function renderSessions(state) {
+	const host = refs.sessions;
+	if (!host) return;
+	const rows = (state.sessions || []).map((s) => ({
+		id: s.id,
+		name: s.name || s.id || '',
+		label: LABEL_WORD[s.label] ? s.label : 'normal',
+		since: typeof s.since === 'number' ? s.since : null,
+		reason: s.reason || '',
+	}));
+	rows.sort((a, b) => (SESSION_ORDER[a.label] - SESSION_ORDER[b.label]) || String(a.name).localeCompare(String(b.name)));
+	clear(host);
+	if (!rows.length) {
+		const li = h('li', { class: 'sx', dataset: { label: 'normal', heat: 'none' } });
+		li.appendChild(h('span', { class: 'sx-dot' }));
+		li.appendChild(h('span', { class: 'sx-name', text: 'セッションなし' }));
+		host.appendChild(li);
+		return;
+	}
+	const now = Date.now();
+	for (const row of rows.slice(0, SESSION_MAX)) {
+		const age = row.since === null ? 0 : Math.max(0, now - row.since);
+		const li = h('li', { class: 'sx', dataset: { label: row.label, heat: waitHeat(row.label, age) } });
+		li.appendChild(h('span', { class: 'sx-dot' }));
+		li.appendChild(h('span', { class: 'sx-name', text: clampText(row.name, 34) }));
+		li.appendChild(h('span', { class: 'sx-why', text: row.label === 'normal' ? '' : clampText(row.reason, 22) }));
+		li.appendChild(h('span', { class: 'sx-age', text: row.label === 'normal' ? '' : elapsedJa(row.since === null ? now : row.since) }));
+		host.appendChild(li);
+	}
+	if (rows.length > SESSION_MAX) {
+		const li = h('li', { class: 'sx sx-more', dataset: { label: 'normal', heat: 'none' } });
+		li.appendChild(h('span', { class: 'sx-name', text: `他 ${rows.length - SESSION_MAX}件` }));
+		host.appendChild(li);
+	}
+}
+
+/** サーバが `label` を返さない間の後方互換。
+ *
+ *  判定（state/overall）→ 盤の語（normal/approval/question/stopped）への写像を
+ *  1箇所に持つ。サーバが label を返すようになったら、その値をそのまま使う
+ *  （ここは素通りする）。判定基準は lib/state.js の judgeOne と同じ:
+ *
+ *    reason に「エラーで停止」「停止したまま」→ stopped
+ *    reason に「承認待ち」→ approval / 「入力待ち」→ question
+ *    それ以外の needs-you（放置・文脈）→ approval 扱い（人が何かする）
+ *    watch（無反応・文脈80%）は normal に丸める（盤の語を増やさない） */
+function labelOfSession(session) {
+	if (session.label) return session.label;
+	const reason = String(session.reason || '');
+	const state = String(session.state || '');
+	if (reason.indexOf('エラー') > -1 || reason.indexOf('停止') > -1) return 'stopped';
+	if (state === 'needs-you' || state === 'alarm') {
+		if (reason.indexOf('承認') > -1) return 'approval';
+		if (reason.indexOf('入力') > -1 || reason.indexOf('質問') > -1) return 'question';
+		return 'approval';
+	}
+	return 'normal';
+}
+
+function withLabels(state) {
+	if (!state || typeof state !== 'object') return state;
+	const sessions = Array.isArray(state.sessions) ? state.sessions : null;
+	if (!sessions) return state;
+	let changed = false;
+	const next = sessions.map((s) => {
+		if (s && s.label) return s;
+		changed = true;
+		return Object.assign({}, s, { label: labelOfSession(s || {}) });
+	});
+	if (!state.label) {
+		const order = { normal: 0, approval: 1, question: 1, stopped: 2 };
+		let worst = 'normal';
+		for (const s of next) {
+			if ((order[s.label] || 0) > (order[worst] || 0)) worst = s.label;
+		}
+		changed = true;
+		return Object.assign({}, state, { sessions: next, label: worst });
+	}
+	return changed ? Object.assign({}, state, { sessions: next }) : state;
+}
 
 function render(state) {
 	const now = Date.now();
-	const overall = OVERALL_TO_STATUS[state.overall] || null;
+	const label = LABEL_WORD[state.label] ? state.label : 'normal';
+	const overall = LABEL_COLOR[label] || null;
 	const status = overall || (state.status === 'warn' || state.status === 'alert' ? state.status : 'ok');
-	const word = OVERALL_TO_WORD[state.overall] || STATUS_WORD[status];
+	const word = LABEL_WORD[label];
 	const alerts = state.alerts || [];
 
 	// The colour field. This line is the alarm.
@@ -480,9 +442,9 @@ function render(state) {
 	setText(refs.alertCount, String(bigNumber));
 	refs.counter.dataset.sev = bigNumber ? 'alert' : 'ok';
 
-	renderWho(state);
+	renderSessions(state);
 	renderStations(buildStations(state));
-	renderTicker([], logAsActivity(state.log, state.overall));
+
 
 	lastGoodAt = now;
 	// 軽い形（v2）には profile も uptime も無い。推測で出さない代わりに、
@@ -498,7 +460,6 @@ function render(state) {
 	}
 
 	document.body.dataset.down = '0';
-	syncTicker();
 	fitContent();
 	document.body.dataset.stale = '0';
 	connection.update();
@@ -518,7 +479,8 @@ function renderError(_error, failures, lastGood) {
 const poller = createPoller({
 	url: '/api/andon/state',
 	intervalMs: 2000,
-	onData: (state) => {
+	onData: (raw) => {
+		const state = withLabels(raw);
 		try {
 			render(state);
 		} catch (error) {

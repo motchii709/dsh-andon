@@ -710,3 +710,145 @@ body {
 	border: 1px solid rgba(255, 255, 255, 0.16);
 	border-radius: 999px;
 }
+
+/* ── レイヤ5: セッション列と、チッカーを畳んだぶんの再配分 (2026-10-27)
+ *
+ * 盤の主役を「状態語（正常/権限/質問/停止）」に、脇を「動いているセッション全部」
+ * にした。旧チッカー（直近ログ3件）は消し、LIVE と時計だけ色面の右下へ移した。
+ *
+ * 状態の色は3色に固定する: 正常=緑 / 権限・質問=黄 / 停止=赤。
+ * 質問を青にしないのは、青が「待ちではない何か」に見えるため（実際どちらも
+ * 人の返事が要る）。色は面ではなく点と語で持たせる — 色面（大きな四角）が
+ * 2色になると、盤全体が何を言っているのか分からなくなる。
+ */
+.field .sessions {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.sx {
+	display: grid;
+	grid-template-columns: 14px minmax(0, 1fr) auto auto;
+	align-items: center;
+	column-gap: clamp(8px, 1vw, 16px);
+	height: clamp(26px, 3.2vh, 38px);
+}
+
+.sx-dot {
+	width: 12px;
+	height: 12px;
+	min-width: 12px;
+	border-radius: 50%;
+	background: var(--ok);
+	flex: none;
+}
+.sx[data-label='approval'] .sx-dot,
+.sx[data-label='question'] .sx-dot {
+	background: var(--warn);
+}
+/* 赤い面の上では赤い点が沈む。停止の点は「白い輪＋太い赤」にして、
+ * 面が赤でも黄でも形として残るようにする（色に頼りすぎない）。 */
+.sx[data-label='stopped'] .sx-dot {
+	background: var(--alert);
+	box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95), inset 0 0 0 2px var(--alert);
+}
+/* 全面が赤・黄のときも点の縁が消えないよう、全ラベルに同じ輪郭を付ける。 */
+.sx-dot {
+	box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.sx-name {
+	font-size: clamp(15px, 1.5vw, 28px);
+	color: var(--n-1000, #0f1115);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sx[data-label='normal'] .sx-name {
+	color: rgba(0, 0, 0, 0.58);
+	font-weight: 400;
+}
+
+.sx-why {
+	font-size: clamp(12px, 1.2vw, 22px);
+	color: rgba(0, 0, 0, 0.58);
+	white-space: nowrap;
+}
+
+.sx-age {
+	font-size: clamp(12px, 1.2vw, 22px);
+	font-variant-numeric: tabular-nums;
+	color: rgba(0, 0, 0, 0.58);
+	white-space: nowrap;
+}
+.sx[data-heat='warm'] .sx-age {
+	color: #8a5a00;
+}
+.sx[data-heat='hot'] .sx-age {
+	color: #b3261e;
+	font-weight: 700;
+}
+.sx-more .sx-name {
+	grid-column: 2 / -1;
+	color: rgba(0, 0, 0, 0.42);
+}
+
+/* チッカーを畳んだので、色面の右下に LIVE と時計を置く。
+ * 消すと「止まってるのか壊れてるのか」が分からなくなるので、これは残す。 */
+.field .field-meta {
+	position: absolute;
+	right: clamp(10px, 1.4vw, 22px);
+	bottom: clamp(8px, 1.2vh, 16px);
+	display: flex;
+	align-items: center;
+	gap: clamp(8px, 1vw, 16px);
+}
+.field .field-meta .clock {
+	font-size: clamp(15px, 1.5vw, 26px);
+	color: rgba(0, 0, 0, 0.62);
+	font-variant-numeric: tabular-nums;
+}
+.field .field-meta .conn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: clamp(11px, 1.1vw, 16px);
+	color: rgba(0, 0, 0, 0.7);
+}
+.field .field-meta .conn-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--ok);
+}
+.field .field-meta .conn[data-state='down'] .conn-dot {
+	background: var(--alert);
+}
+.field .field-meta .notes {
+	position: absolute;
+	left: clamp(10px, 1.4vw, 22px);
+	bottom: clamp(8px, 1.2vh, 16px);
+	font-size: clamp(11px, 1vw, 15px);
+	color: rgba(0, 0, 0, 0.55);
+}
+
+/* 盤の骨格: 色面が上（横並びでは右）、レールが下（横並びでは左）。
+ *
+ * HTML の並びは レール → 色面 だが、盤としては色面が主役。grid の自動配置に
+ * 任せると レールが1行目に来て色面が潰れるので、位置を明示する。
+ * 横並び（広い）:  レール=左列・全高 / 色面=右列・全高
+ * 縦積み（狭い）:  色面=1行目 / レール=2行目
+ */
+#board > .field { grid-column: 2; grid-row: 1; }
+#board > .rail { grid-column: 1; grid-row: 1; }
+
+@media (max-width: 1100px), (max-height: 620px) {
+	#board > .field { grid-column: 1; grid-row: 1; }
+	#board > .rail { grid-column: 1; grid-row: 2; }
+}
