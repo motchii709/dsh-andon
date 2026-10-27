@@ -740,6 +740,8 @@ body {
 	height: clamp(26px, 3.2vh, 38px);
 }
 
+/* 状態の点。面が緑でも黄でも赤でも「点がある」と分かるように、白い輪を必ず付ける。
+ * 色だけに頼らないのは、色覚と、面の色との同化の両方に対する備え。 */
 .sx-dot {
 	width: 12px;
 	height: 12px;
@@ -747,20 +749,14 @@ body {
 	border-radius: 50%;
 	background: var(--ok);
 	flex: none;
+	box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95), 0 0 0 3px rgba(0, 0, 0, 0.18);
 }
 .sx[data-label='approval'] .sx-dot,
 .sx[data-label='question'] .sx-dot {
 	background: var(--warn);
 }
-/* 赤い面の上では赤い点が沈む。停止の点は「白い輪＋太い赤」にして、
- * 面が赤でも黄でも形として残るようにする（色に頼りすぎない）。 */
 .sx[data-label='stopped'] .sx-dot {
 	background: var(--alert);
-	box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95), inset 0 0 0 2px var(--alert);
-}
-/* 全面が赤・黄のときも点の縁が消えないよう、全ラベルに同じ輪郭を付ける。 */
-.sx-dot {
-	box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
 }
 
 .sx-name {
@@ -851,4 +847,19 @@ body {
 @media (max-width: 1100px), (max-height: 620px) {
 	#board > .field { grid-column: 1; grid-row: 1; }
 	#board > .rail { grid-column: 1; grid-row: 2; }
+}
+
+/* 時計は「左上の帯」へ移した (2026-10-27)。
+ *
+ * 盤を見た瞬間に知りたいのは「何時か」で、それは状態語と並ぶ位置にあるべき。
+ * 右下の LIVE の隣に小さく置いていたときは、3m から読めなかった。
+ * tabular-nums で桁が揺れないようにする（秒が動くたびに幅が変わると目障り）。 */
+.field .field-tag #clock.clock {
+	font-size: clamp(16px, 1.8vw, 32px);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.02em;
+	color: inherit;
+	opacity: 0.82;
+	margin-right: clamp(8px, 1vw, 18px);
 }

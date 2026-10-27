@@ -531,18 +531,19 @@
 					<span class="sr-i num">2</span><span class="sr-l">作業中</span
 					><span class="sr-v num live-value">—</span>
 				</div>
-				<div class="sr" id="st-context" data-sev="off">
-					<span class="sr-i num">3</span><span class="sr-l">記憶</span
-					><span class="sr-v num live-value">—</span>
-				</div>
 				<div class="sr" id="st-errors" data-sev="off">
-					<span class="sr-i num">4</span><span class="sr-l">異常</span
+					<span class="sr-i num">3</span><span class="sr-l">異常</span
 					><span class="sr-v num live-value">—</span>
 				</div>
-			</aside>
+							<div class="sr" id="st-diagnostics" data-sev="off">
+					<span class="sr-i num">4</span><span class="sr-l">診断不能</span
+					><span class="sr-v num live-value">—</span>
+				</div>
+</aside>
 
 			<section class="field" aria-label="状態">
 				<div class="field-tag">
+					<span id="clock" class="clock num">--:--:--</span>
 					<span>DSH 状態</span>
 					<span id="host">—</span>
 				</div>
@@ -567,7 +568,6 @@
 <div class="conn" id="conn" data-state="ok">
 						<i class="conn-dot"></i><span data-role="conn-label">LIVE</span>
 					</div>
-<div class="clock num" id="clock">--:--:--</div>
 </div>
 <p class="notes" id="notes" hidden></p>
 				<button class="fs" id="fs" type="button" aria-label="全画面の切替" title="全画面（F）">⛶</button>

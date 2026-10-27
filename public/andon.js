@@ -40,7 +40,7 @@ function setText(node, text) {
 	if (node.textContent !== value) node.textContent = value;
 }
 
-const STATION_IDS = ['needs-you', 'running', 'context', 'errors'];
+const STATION_IDS = ['needs-you', 'running', 'errors', 'diagnostics'];
 
 const refs = {
 	board: $('board'),
@@ -151,10 +151,6 @@ function showDiag() {
 			`doc=${document.documentElement.clientHeight}`,
 			`board=${Math.round(box.height)}`,
 			`boardBottom=${Math.round(box.bottom)}`,
-			// レールの点灯が実機で消えることがある（色の宣言が環境で落ちる）。
-			// 状態と実際に塗られた色を並べて出す: 「点いているつもり」を防ぐ。
-			`ctx=${document.querySelector('#st-context') ? document.querySelector('#st-context').dataset.sev : '?'}`,
-			`ctxbg=${document.querySelector('#st-context .sr-v') ? getComputedStyle(document.querySelector('#st-context .sr-v')).backgroundColor : '?'}`,
 		].join('  ');
 	};
 	const box = document.createElement('div');
@@ -187,11 +183,10 @@ function calmLine(state) {
  *
  *  8局あったが、常時 0 で、0 のときに何も起きない数字（セッション・ジョブ・
  *  サブ・目標）は落とした。意味の分からない数字が並ぶ板は、読む前に
- *  「読まなくていい」と判断される。残したのは4つだけ:
+ *  「読まなくていい」と判断される。残したのは3つだけ:
  *
  *    要対応  人が動く番（承認待ち・入力待ち）
  *    作業中  DSH がいま動かしている数
- *    記憶    会話の記憶がどれだけ埋まっているか（%）
  *    異常    壊れている数（失敗・起動失敗・診断・止まった目標）
  *
  *  サーバは counts を今も全部返す（API は変えない）。戻したくなったら
@@ -211,9 +206,14 @@ function buildStations(state) {
 		}
 		return known ? total : null;
 	};
-	const contextMax = n('contextMax');
-	// errors は失敗ジョブ・起動失敗・診断の合計。目標の停止は別枠なので足す。
-	const trouble = sum(['errors', 'goalsBlocked', 'goalsPaused']);
+	// `errors` に診断不能が混ざっている（サーバ側の定義）。
+	// 「壊れた」と「読めなかった」は人がやることが違う（直す / 見に行く）ので分ける。
+	const rawErrors = n('errors');
+	const diagnostics = n('subagentDiagnostics');
+	const realErrors = rawErrors === null ? null : Math.max(0, rawErrors - (diagnostics || 0));
+	const trouble = realErrors === null && n('goalsBlocked') === null && n('goalsPaused') === null
+		? null
+		: (realErrors || 0) + (n('goalsBlocked') || 0) + (n('goalsPaused') || 0);
 	const parts = [];
 	if (n('jobsFailed')) parts.push(`失敗ジョブ ${n('jobsFailed')}`);
 	if (n('goalsBlocked')) parts.push(`目標遮断 ${n('goalsBlocked')}`);
@@ -229,20 +229,21 @@ function buildStations(state) {
 		},
 		{ id: 'running', label: '作業中', value: c.running || 0, suffix: '', hint: '動いているエージェント', severity: 'ok' },
 		{
-			id: 'context',
-			label: '記憶',
-			value: contextMax === null ? '—' : contextMax,
-			suffix: contextMax === null ? '' : '%',
-			hint: '会話の記憶の埋まり具合',
-			severity: contextMax >= 90 ? 'alert' : contextMax >= 75 ? 'warn' : 'ok',
-		},
-		{
 			id: 'errors',
 			label: '異常',
 			value: trouble === null ? '—' : trouble,
 			suffix: '',
 			hint: parts.length ? parts.join(' / ') : '壊れているものは無い',
 			severity: trouble > 0 ? 'alert' : 'ok',
+		},
+		{
+			id: 'diagnostics',
+			label: '診断不能',
+			value: diagnostics === null ? '—' : diagnostics,
+			suffix: '',
+			hint: diagnostics > 0 ? 'サブエージェントの状態を読めなかった' : '全部読めている',
+			// 読めなかったは「壊れた」ではない。赤にすると盤が嘘をつくので黄まで。
+			severity: diagnostics > 0 ? 'warn' : 'ok',
 		},
 	];
 }
